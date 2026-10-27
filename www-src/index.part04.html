@@ -1,0 +1,253 @@
+  </div>`; }
+function rPlan(){ const c=child(); const today=localDate(); const days=[]; for(let i=0;i<7;i++) days.push(addDays(today,i));
+  return `<div class="topbar"><button class="btn-icon" data-act="child">→</button><h1>📅 الخطة الأسبوعية</h1></div>
+  <div class="stack">
+    ${c.studyTimes?`<div class="note">أوقات المذاكرة المتفق عليها: ${esc(c.studyTimes)}</div>`:''}
+    <div class="plan">${days.map(d=>{ const tk=c.tasks.filter(t=>t.date===d); const hw=c.homework.filter(h=>h.due===d&&h.status!=='parent_reviewed'); return `<div class="day ${d===today?'today':''}"><h4>${dayName(d)} <span class="tag">${fmtDate(d).slice(0,5)}</span></h4>${hw.map(h=>`<div class="small">📝 ${esc(h.title)}</div>`).join('')}${tk.map(t=>`<label class="small" style="display:flex;gap:4px"><input type="checkbox" style="width:18px;height:18px;min-height:0" data-act="toggleTask" data-id="${t.id}" ${t.done?'checked':''}><span style="${t.done?'text-decoration:line-through':''}">${esc(t.title)}</span></label>`).join('')}</div>`; }).join('')}</div>
+    <div class="card stack"><h3>مهمة جديدة</h3><div class="row"><input id="taskIn" placeholder="مثال: مراجعة درس الكسور 15 دقيقة" style="flex:2;min-width:180px"><select id="taskDay" style="flex:1;min-width:140px">${days.map(d=>`<option value="${d}">${dayName(d)} ${fmtDate(d).slice(0,5)}</option>`).join('')}</select><button class="btn-primary" data-act="addTask">إضافة</button></div></div>
+    <div class="card stack"><h3>كل المهام</h3>${c.tasks.length?c.tasks.map(t=>`<div class="task ${t.done?'done':''}"><input type="checkbox" aria-label="تم" data-act="toggleTask" data-id="${t.id}" ${t.done?'checked':''}><span class="t">${esc(t.title)} <span class="tag">${t.date?dayName(t.date)+' '+fmtDate(t.date):''}</span>${t.by==='parent'?' <span class="chip">من ولي الأمر</span>':''}</span><button class="btn-sm btn-ghost" data-act="delTask" data-id="${t.id}">✕</button></div>`).join(''):'<p class="muted small">لا مهام.</p>'}</div>
+  </div>`; }
+
+/* --- لوحة ولي الأمر --- */
+function recommendation(c){
+  const stats=skillStats(c); const t=todayItems(c);
+  const nr=stats.find(s=>s.status==='needs_review');
+  if(nr) return {text:`راجع مع ${c.name} مهارة «${nr.skill}» لمدة 10 دقائق، ثم اطلب منه${c.fem?'ا':''} حل سؤالين بلا تلميح. (${evidenceText(nr)})`,why:'آخر ثلاث محاولات في هذه المهارة تضمنت عرض الحل أو إجابات بمساعدة.'};
+  if(t.late.length) return {text:`واجب متأخر: «${t.late[0].title}». اسأل ${c.name} عن سبب التأخر وحددا وقتًا قصيرًا اليوم لإنهائه.`,why:'تاريخ التسليم مضى ولم يُعلَّم كمكتمل.'};
+  const cd=c.homework.filter(h=>h.status==='child_done'); if(cd.length) return {text:`راجع واجب «${cd[0].title}» الذي علّم${c.fem?'ته':'ه'} ${c.name} كمكتمل، وعلّمه كمُراجَع.`,why:'أكمله الطفل ولم يُراجَع بعد.'};
+  const last=c.lastActive; if(!last) return {text:`لم ${c.fem?'تبدأ':'يبدأ'} ${c.name} بعد. اجلسا معًا 10 دقائق لتجربة أول درس.`,why:'لا نشاط مسجل.'};
+  if(Date.now()-last>3*86400000) return {text:`لا نشاط منذ ${Math.floor((Date.now()-last)/86400000)} أيام. درس قصير اليوم يحافظ على العادة.`,why:'آخر نشاط مسجل قديم.'};
+  const ins=stats.filter(s=>s.status==='insufficient').length;
+  if(stats.length&&ins===stats.length) return {text:`البيانات غير كافية بعد للحكم على المهارات. جلستان قصيرتان هذا الأسبوع تكفيان لبداية التقييم.`,why:'أقل من 3 محاولات لكل مهارة.'};
+  const m=stats.filter(s=>s.status==='mastered'); if(m.length) return {text:`${c.name} أتقن${c.fem?'ت':''} «${m[0].skill}». يمكن الانتقال لدرس جديد، مع مراجعة خفيفة بعد ${c.skillMeta[m[0].skill]?c.skillMeta[m[0].skill].interval:3} أيام.`,why:'آخر ثلاث محاولات مستقلة وصحيحة.'};
+  return {text:'استمرا كما أنتما؛ لا توجد مهارة متعثرة حاليًا.',why:'لا مؤشرات تحتاج تدخلًا.'};
+}
+function rParent(){
+  const tab=view.tab||'overview'; const tabs=[['overview','نظرة عامة'],['child','تفاصيل طفل'],['content','الدروس والواجبات'],['weekly','الملخص الأسبوعي'],['settings','الإعدادات والبيانات']];
+  const top=`<div class="topbar no-print"><button class="btn-icon" data-act="home" aria-label="الرئيسية">🏠</button><div class="grow"><h1>لوحة ولي الأمر</h1><div class="muted small">${fmtDate(localDate())} · ${dayName(localDate())}</div></div><button class="btn-sm btn-ghost" data-act="lockParent">🔒 قفل</button></div>
+  <div class="pill-tabs no-print" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${tab===t[0]}" data-act="ptab" data-t="${t[0]}">${t[1]}</button>`).join('')}</div>`;
+  const F={overview:pOverview,child:pChild,content:pContent,weekly:pWeekly,settings:pSettings};
+  return top+F[tab]();
+}
+function pOverview(){
+  const anyData=childList().some(c=>c.attempts.length||c.sessions.length);
+  return `<div class="stack">${anyData?'':'<div class="note">لا توجد بيانات تعلم مسجلة بعد. كل ما تراه هنا يُبنى من استخدام الأطفال الفعلي؛ لا بيانات تجريبية في هذه اللوحة. الدروس والواجبات التجريبية موسومة بـ «تجريبي».</div>'}
+  <div class="grid-2">${childList().map(c=>{ const t=todayItems(c); const rec=recommendation(c); const todayMin=minutes(c.activity[localDate()]||0); const doneToday=c.attempts.filter(a=>localDate(new Date(a.ts))===localDate()).length; const stats=skillStats(c); const ins=stats.filter(s=>s.status==='insufficient').length;
+    return `<div class="card stack" data-theme-kid="${c.theme}"><div class="row" style="justify-content:space-between"><h2>${c.avatar} ${esc(c.name)} <span class="tag">${esc(c.gradeLabel)}</span></h2><button class="btn-sm" data-act="ptab" data-t="child" data-id="${c.id}">التفاصيل</button></div>
+      <div class="kpi"><div class="k"><b>${t.due.length+t.tasks.length}</b><span>مطلوب اليوم</span></div><div class="k"><b>${doneToday}</b><span>أسئلة حُلّت اليوم</span></div><div class="k"><b>${t.late.length}</b><span>متأخر</span></div><div class="k"><b>${todayMin} د</b><span>تعلّم فعلي اليوم*</span></div></div>
+      <div class="row"><span class="chip good">${stats.filter(s=>s.status==='mastered').length} متقنة</span><span class="chip warn">${stats.filter(s=>s.status==='needs_review').length} تحتاج مراجعة</span><span class="chip">${ins} بيانات غير كافية</span></div>
+      <div class="small muted">آخر نشاط: ${c.lastActive?fmtTime(c.lastActive)+' — '+esc(c.lastActivityLabel):'لا نشاط بعد'}</div>
+      <div class="note"><b>توصية (استنتاج البرنامج):</b> ${esc(rec.text)}<br><span class="tag">السبب: ${esc(rec.why)}</span></div>
+    </div>`; }).join('')}</div>
+  <p class="muted small">* وقت التعلّم يُحتسب فقط أثناء التفاعل الفعلي داخل جلسات الطفل (ليس مجرد فتح الشاشة)، ويتوقف بعد دقيقة بلا تفاعل. الأرقام تقريبية.</p>
+  </div>`;
+}
+function childSelector(sel){ return `<div class="pill-tabs">${childList().map(c=>`<button aria-selected="${sel===c.id}" data-act="ptab" data-t="${view.tab}" data-id="${c.id}">${c.avatar} ${esc(c.name)}</button>`).join('')}</div>`; }
+function pChild(){
+  const c=child(view.id||'nermeen'); const stats=skillStats(c); const t=todayItems(c);
+  const hintRel=c.attempts.length?`من ${c.attempts.length} سؤالًا مكتملًا، استخدم تلميحًا في ${c.attempts.filter(a=>a.hints>0).length}، وعُرض الحل في ${c.attempts.filter(a=>a.result==='revealed').length}.`:'لا محاولات مسجلة بعد.';
+  const wrongs=c.wrongs.slice(-8).reverse();
+  const bySkillWrong={}; c.wrongs.forEach(w=>{bySkillWrong[w.skill]=(bySkillWrong[w.skill]||0)+1;});
+  const rep=Object.entries(bySkillWrong).filter(e=>e[1]>=2).sort((a,b)=>b[1]-a[1]);
+  const last7=[]; for(let i=6;i>=0;i--){ const d=addDays(localDate(),-i); last7.push([d,minutes(c.activity[d]||0)]); }
+  return `<div class="stack">${childSelector(c.id)}
+    <div class="card stack" data-theme-kid="${c.theme}"><div class="eyebrow">بيانات مسجلة</div>
+      <div class="kpi"><div class="k"><b>${c.stars}</b><span>نجوم</span></div><div class="k"><b>${c.completedLessons.length}/${c.lessons.length}</b><span>دروس مكتملة</span></div><div class="k"><b>${c.attempts.length}</b><span>أسئلة مكتملة</span></div><div class="k"><b>${c.sessions.length}</b><span>جلسات</span></div></div>
+      <div class="tbl"><table><thead><tr>${last7.map(x=>`<th>${dayName(x[0]).slice(0,7)}</th>`).join('')}</tr></thead><tbody><tr>${last7.map(x=>`<td>${x[1]} د</td>`).join('')}</tr></tbody></table></div>
+      <p class="small muted">دقائق التعلّم الفعلي لآخر 7 أيام (تقريبية).</p>
+      ${c.hard.length?`<div class="note">علّم${c.fem?'ت':''} ${esc(c.name)} هذه الدروس كصعبة: ${c.hard.map(id=>{const l=c.lessons.find(x=>x.id===id);return l?esc(l.title):''}).join('، ')}</div>`:''}
+    </div>
+    <div class="card stack"><h2>المهارات</h2><p class="small muted">الحكم يُبنى على آخر 3 محاولات، ويُشترط للإتقان أن تكون المحاولات موزعة على يومين مختلفين على الأقل وبلا عرض للحل مؤخرًا. إجابة صحيحة واحدة لا تكفي. «مستقلة» = صحيحة من أول محاولة بلا تلميح.</p>
+      ${stats.length?`<div class="tbl"><table><thead><tr><th>المهارة</th><th>المادة</th><th>الحالة</th><th>الأدلة</th><th>مستويات</th></tr></thead><tbody>${stats.map(s=>{const st=STATUS_SKILL[s.status];return `<tr><td>${esc(s.skill)}</td><td>${esc(s.subject)}</td><td><span class="chip ${st[1]}">${st[2]} ${st[0]}</span></td><td class="small">${evidenceText(s)}</td><td class="small">${Object.entries(s.levels).map(e=>`${esc(e[0])}: ${e[1].ok}/${e[1].n}`).join(' · ')}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">لا بيانات بعد.</p>'}
+    </div>
+    <div class="grid-2">
+      <div class="card stack"><h2>الأخطاء المتكررة</h2>${rep.length?`<div class="row">${rep.map(e=>`<span class="chip warn">${esc(e[0])} × ${e[1]}</span>`).join('')}</div>`:'<p class="muted small">لا مهارة تكرر فيها الخطأ مرتين أو أكثر.</p>'}
+        ${wrongs.length?`<div class="stack small">${wrongs.map(w=>`<div><b>${esc(w.prompt)}</b><br>أجاب: <span style="color:var(--bad)">${w.wrongs.map(esc).join(' / ')}</span> · الصحيح: ${esc(w.correct)} <span class="tag">${fmtDate(localDate(new Date(w.ts)))}</span></div>`).join('')}</div>`:''}
+        <div class="note small"><b>الاعتماد على التلميحات:</b> ${hintRel}</div>
+      </div>
+      <div class="card stack"><h2>الواجبات</h2>${c.homework.length?c.homework.map(h=>{ const late=h.due&&h.due<localDate()&&(h.status==='not_started'||h.status==='in_progress'); return `<div class="task"><span class="t"><b>${esc(h.title)}</b> <span class="tag">${esc(h.subject)}</span> ${h.source==='demo'?'<span class="chip demo">تجريبي</span>':''}<br><span class="chip ${h.status==='parent_reviewed'?'good':h.status==='child_done'?'info':late?'bad':''}">${late?'متأخر · ':''}${STATUS[h.status]}</span> <span class="tag">التسليم ${fmtDate(h.due)}</span>${h.parentNote?`<br><span class="small">ملاحظتك: ${esc(h.parentNote)}</span>`:''}</span>
+        <span class="stack" style="gap:4px">${h.status==='child_done'?`<button class="btn-sm btn-primary" data-act="reviewHW" data-cid="${c.id}" data-id="${h.id}">راجعته ✓</button>`:''}${h.status==='parent_reviewed'?`<button class="btn-sm btn-ghost" data-act="reopenHW" data-cid="${c.id}" data-id="${h.id}">إعادة فتح</button>`:''}<button class="btn-sm btn-ghost" data-act="delHW" data-cid="${c.id}" data-id="${h.id}">حذف</button></span></div>`; }).join(''):'<p class="muted small">لا واجبات.</p>'}
+        ${view.reviewId?`<div class="card soft stack"><label class="f" for="hwNote">ملاحظة قصيرة للطفل (اختياري)</label><input id="hwNote" placeholder="مثال: ممتاز، انتبه لكتابة الوحدة"><button class="btn-sm btn-primary" data-act="confirmReviewHW" data-cid="${c.id}" data-id="${view.reviewId}">تأكيد المراجعة</button></div>`:''}
+      </div>
+    </div>
+    <div class="grid-2">
+      <div class="card stack"><h2>أوقات المذاكرة والمهام</h2><label class="f" for="stIn">أوقات المذاكرة المتفق عليها (نص حر)</label><div class="row"><input id="stIn" value="${esc(c.studyTimes)}" placeholder="مثال: الأحد–الخميس 5:00–5:30 مساءً" style="flex:1"><button class="btn-sm btn-primary" data-act="saveStudyTimes" data-cid="${c.id}">حفظ</button></div>
+        <label class="f" for="ptaskIn">إضافة مهمة إلى خطة ${esc(c.name)}</label><div class="row"><input id="ptaskIn" placeholder="مثال: مراجعة جدول 4" style="flex:2;min-width:160px"><input id="ptaskDay" type="date" value="${localDate()}" style="flex:1;min-width:140px"><button class="btn-sm btn-primary" data-act="addTaskP" data-cid="${c.id}">إضافة</button></div>
+        ${c.tasks.length?`<div class="small">${c.tasks.map(t=>`<div class="task ${t.done?'done':''}"><span class="t">${t.done?'✅':'⬜'} ${esc(t.title)} <span class="tag">${fmtDate(t.date)}</span></span><button class="btn-sm btn-ghost" data-act="delTaskP" data-cid="${c.id}" data-id="${t.id}">✕</button></div>`).join('')}</div>`:''}
+      </div>
+      <div class="card stack"><h2>ملاحظات ${esc(c.name)} وشروح${c.fem?'ها':'ه'}</h2>${c.notes?`<div class="note">${esc(c.notes)}</div>`:''}${c.goals.length?`<div class="small">الأهداف: ${c.goals.map(g=>(g.done?'✅ ':'⬜ ')+esc(g.title)).join(' · ')}</div>`:''}
+        ${c.explanations.length?`<div class="stack small">${c.explanations.slice(-5).reverse().map(e=>`<div><b>${esc(e.prompt)}</b><br>«${esc(e.text)}»</div>`).join('')}</div>`:'<p class="muted small">لم يكتب شروحًا لطريقته بعد.</p>'}
+        <div class="small"><b>الشارات:</b> ${c.badges.map(b=>esc(b.title)).join('، ')||'لا شيء بعد'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+function pContent(){
+  const c=child(view.id||'nermeen'); const sub=view.sub||'map';
+  return `<div class="stack">${childSelector(c.id)}
+    <div class="pill-tabs"><button aria-selected="${sub==='map'}" data-act="psub" data-s="map">🗺️ خريطة منهج 2026/2027</button><button aria-selected="${sub==='lesson'}" data-act="psub" data-s="lesson">➕ إضافة درس</button><button aria-selected="${sub==='hw'}" data-act="psub" data-s="hw">➕ إضافة واجب</button><button aria-selected="${sub==='list'}" data-act="psub" data-s="list">📚 دروس ${esc(c.name)}</button></div>
+    ${sub==='map'?pCurriculumMap(c):sub==='lesson'?pLessonForm(c):sub==='hw'?pHWForm(c):pLessonList(c)}
+  </div>`;
+}
+
+function pCurriculumMap(c){
+  const cu=CURRICULUM[c.id]; const have=new Set(c.lessons.map(l=>l.title));
+  return `<div class="card stack"><h2>خريطة منهج ${esc(c.name)} — ${esc(cu.year)}</h2>
+    <div class="note small">هذه <b>عناوين</b> الوحدات والدروس كما نشرتها مواقع تعليمية وصحفية نقلًا عن الوزارة، وليست نص الكتاب. لكل مادة مصدرها ودرجة ثقتي فيه. المرجع الرسمي للكتب: <a href="${OFFICIAL_LIB}" target="_blank" rel="noopener">المكتبة الإلكترونية لوزارة التربية والتعليم</a>. ${esc(cu.note)}</div>
+    ${cu.subjects.map(sb=>`<div class="card soft stack"><div class="row" style="justify-content:space-between"><h3>${esc(sb.name)}</h3><span class="chip ${/عالية/.test(sb.src.conf)?'good':/منخفضة/.test(sb.src.conf)?'warn':'info'}">ثقة ${esc(sb.src.conf.split(/[:\s]/)[0])}</span></div>
+      <div class="small muted">المصدر: <a href="${esc(sb.src.url)}" target="_blank" rel="noopener">${esc(sb.src.label)}</a><br>${esc(sb.src.conf)}</div>
+      ${sb.units.map(u=>`<div><b>${esc(u.title)}</b>${u.lessons.length?`<div class="stack" style="gap:4px;margin-top:4px">${u.lessons.map(t=>`<div class="row" style="gap:6px"><span class="small">• ${esc(t)}</span>${have.has(t)?'<span class="chip good">مضاف</span>':`<button class="btn-sm btn-ghost" style="min-height:30px;padding:2px 8px" data-act="useTitle" data-cid="${c.id}" data-sub="${esc(sb.name)}" data-unit="${esc(u.title)}" data-title="${esc(t)}">أضف درسًا بهذا العنوان</button>`}</div>`).join('')}</div>`:`<div class="row" style="gap:6px"><span class="small muted">عناوين الدروس غير متاحة في المصدر</span><button class="btn-sm btn-ghost" style="min-height:30px;padding:2px 8px" data-act="useTitle" data-cid="${c.id}" data-sub="${esc(sb.name)}" data-unit="${esc(u.title)}" data-title="">أضف درسًا في هذا الفصل</button></div>`}</div>`).join('')}
+    </div>`).join('')}
+  </div>`;
+}
+function pLessonForm(c){
+  const qs=view.qdraft||[]; const L=view.ldraft||{}; const v=k=>esc(L[k]||''); const sel=(k,val,def)=>(L[k]?L[k]===val:def)?'selected':'';
+  return `<div class="card stack"><h2>درس جديد لـ ${esc(c.name)}</h2>
+    <div class="note small">يُحفظ الدرس على هذا الجهاز فقط. لا تُرسل صور الكتب أو النصوص إلى أي خدمة خارجية. استخراج النص من الصور (OCR) غير مفعّل في هذه النسخة؛ انسخ النص من الكتاب أو اكتبه. وميّز بصدق مصدر المحتوى.</div>
+    <div class="grid-2">
+      <div class="field"><label class="f" for="lSub">المادة</label><input id="lSub" value="${v('lSub')}" list="subs" placeholder="لغة عربية / رياضيات / علوم / English"><datalist id="subs"><option>لغة عربية</option><option>رياضيات</option><option>علوم</option><option>English</option><option>دراسات اجتماعية</option><option>تربية دينية</option></datalist></div>
+      <div class="field"><label class="f" for="lUnit">الوحدة</label><input id="lUnit" value="${v('lUnit')}" placeholder="مثال: الوحدة الثانية"></div>
+      <div class="field"><label class="f" for="lTitle">عنوان الدرس</label><input id="lTitle" value="${v('lTitle')}" placeholder="مثال: الجمع بالحمل"></div>
+      <div class="field"><label class="f" for="lSource">مصدر المحتوى</label><select id="lSource"><option value="book" ${sel('lSource','book',true)}>من كتاب المدرسة (منقول نصًا)</option><option value="parent" ${sel('lSource','parent',false)}>تدريب إضافي من إعدادي</option></select></div>
+      <div class="field"><label class="f" for="lLang">لغة الدرس</label><select id="lLang"><option value="ar" ${sel('lLang','ar',true)}>عربي</option><option value="en" ${sel('lLang','en',false)}>English</option></select></div>
+      <div class="field"><label class="f" for="lTerm">الفصل الدراسي</label><input id="lTerm" value="${v('lTerm')}" placeholder="مثال: الفصل الأول 2026/2027"></div>
+    </div>
+    <div class="field"><label class="f" for="lObj">الأهداف (سطر لكل هدف)</label><textarea id="lObj" style="min-height:70px" placeholder="أجمع عددين مع الحمل&#10;أحل مسألة لفظية">${v('lObj')}</textarea></div>
+    <div class="field"><label class="f" for="lExp">الشرح (نص الدرس أو شرحك المبسط)</label><textarea id="lExp">${v('lExp')}</textarea></div>
+    <div class="grid-2"><div class="field"><label class="f" for="lExQ">مثال محلول: السؤال</label><input id="lExQ" value="${v('lExQ')}"></div><div class="field"><label class="f" for="lExA">المثال: الإجابة</label><input id="lExA" value="${v('lExA')}"></div></div>
+    <div class="field"><label class="f" for="lExS">خطوات المثال (سطر لكل خطوة)</label><textarea id="lExS" style="min-height:60px">${v('lExS')}</textarea></div>
+    <div class="field"><label class="f" for="lAtt">صور صفحات الكتاب أو PDF (اختياري، حتى 1.5 م.ب للملف)</label><input id="lAtt" type="file" accept="image/*,application/pdf" multiple><div class="tag">اختر المرفقات في النهاية، قبل الضغط على «حفظ الدرس» مباشرة.</div></div>
+    <hr class="sep">
+    <h3>أسئلة التدريب (${qs.length})</h3>
+    ${qs.length?`<div class="stack small">${qs.map((q,i)=>`<div class="task"><span class="t">${i+1}. ${esc(q.prompt)} <span class="tag">${q.type==='choice'?'اختيار':'إجابة قصيرة'} · ${esc(q.skill)}</span></span><button class="btn-sm btn-ghost" data-act="qdel" data-i="${i}">✕</button></div>`).join('')}</div>`:''}
+    <div class="card soft stack">
+      <div class="grid-2">
+        <div class="field"><label class="f" for="qType">النوع</label><select id="qType"><option value="choice">اختيار من متعدد</option><option value="short">إجابة قصيرة</option></select></div>
+        <div class="field"><label class="f" for="qSkill">المهارة (قصيرة ومحددة)</label><input id="qSkill" value="${v('qSkill')}" placeholder="مثال: جمع عددين مع الحمل"></div>
+        <div class="field"><label class="f" for="qLevel">المستوى</label><select id="qLevel"><option>تذكر</option><option selected>فهم</option><option>تطبيق</option><option>استنتاج</option></select></div>
+        <div class="field"><label class="f" for="qDiff">الصعوبة</label><select id="qDiff"><option value="1">سهل</option><option value="2" selected>متوسط</option><option value="3">صعب</option></select></div>
+      </div>
+      <div class="field"><label class="f" for="qPrompt">نص السؤال</label><input id="qPrompt"></div>
+      <div class="field"><label class="f" for="qOpts">الخيارات (سطر لكل خيار؛ ضع * قبل الصحيح) — أو الإجابات المقبولة للسؤال القصير (سطر لكل إجابة)</label><textarea id="qOpts" style="min-height:80px" placeholder="*12&#10;10&#10;14"></textarea></div>
+      <div class="grid-2"><div class="field"><label class="f" for="qHint">تلميح 1</label><input id="qHint"></div><div class="field"><label class="f" for="qHint2">تلميح 2</label><input id="qHint2"></div></div>
+      <div class="field"><label class="f" for="qExplain">شرح الإجابة الصحيحة</label><input id="qExplain"></div>
+      <button class="btn-sm" data-act="qadd">＋ أضف السؤال إلى الدرس</button>
+    </div>
+    ${view.err?`<p style="color:var(--bad);font-weight:700">${esc(view.err)}</p>`:''}
+    <button class="btn-big btn-primary" data-act="saveLesson" data-cid="${c.id}">حفظ الدرس</button>
+  </div>`;
+}
+const LESSON_FIELDS=['lSub','lUnit','lTitle','lSource','lLang','lTerm','lObj','lExp','lExQ','lExA','lExS','qSkill'];
+function captureLessonForm(){ const o={}; LESSON_FIELDS.forEach(k=>{ const e=document.getElementById(k); if(e) o[k]=e.value; }); view.ldraft=o; }
+function pHWForm(c){ const H=view.hdraft||{}; const v=k=>esc(H[k]||'');
+  return `<div class="card stack"><h2>واجب جديد لـ ${esc(c.name)}</h2>
+    <div class="note small">لا يوجد اتصال بالمدرسة؛ الواجبات تُضاف يدويًا هنا (نصًا أو بصورة من كراسة الواجب).</div>
+    <div class="grid-2">
+      <div class="field"><label class="f" for="hSub">المادة</label><input id="hSub" value="${v('hSub')}" placeholder="رياضيات"></div>
+      <div class="field"><label class="f" for="hTitle">العنوان</label><input id="hTitle" value="${v('hTitle')}" placeholder="تمارين صفحة 42"></div>
+      <div class="field"><label class="f" for="hDue">تاريخ التسليم</label><input id="hDue" type="date" value="${H.hDue||addDays(localDate(),1)}"></div>
+      <div class="field"><label class="f" for="hLesson">ربط بدرس (للمساعدة عند التعثر)</label><select id="hLesson"><option value="">بدون</option>${c.lessons.map(l=>`<option value="${l.id}" ${H.hLesson===l.id?'selected':''}>${esc(l.title)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label class="f" for="hReq">المطلوب</label><textarea id="hReq" placeholder="حل التمارين من 1 إلى 5...">${v('hReq')}</textarea></div>
+    <div class="field"><label class="f" for="hAtt">صورة الواجب أو PDF (اختياري)</label><input id="hAtt" type="file" accept="image/*,application/pdf" multiple></div>
+    ${view.err?`<p style="color:var(--bad);font-weight:700">${esc(view.err)}</p>`:''}
+    <button class="btn-big btn-primary" data-act="saveHW" data-cid="${c.id}">حفظ الواجب</button>
+  </div>`;
+}
+function pLessonList(c){
+  return `<div class="card stack"><h2>دروس ${esc(c.name)}</h2>${c.lessons.map(l=>`<div class="task"><span class="t"><b>${esc(l.title)}</b> <span class="tag">${esc(l.subject)} · ${esc(l.unit)} · ${esc(l.term||'')}</span> ${srcChip(l)}<br><span class="small muted">${l.questions.length} أسئلة · ${lessonProgress(c,l)} حُلّت${l.attachments.length?' · '+l.attachments.length+' مرفق':''}</span></span><button class="btn-sm btn-ghost" data-act="delLesson" data-cid="${c.id}" data-id="${l.id}">حذف</button></div>`).join('')}
+  <p class="small muted">حذف الدرس يُبقي المحاولات المسجلة في سجل المهارات. عند تغيّر الفصل الدراسي، احذف الدروس القديمة أو أضف دروسًا جديدة بفصلها.</p></div>`;
+}
+function weeklyText(){
+  const end=localDate(), start=addDays(end,-6); let out=`الملخص الأسبوعي — ${fmtDate(start)} إلى ${fmtDate(end)}\n`;
+  childList().forEach(c=>{ const w=weekly(c); out+=`\n${c.name} (${c.gradeLabel})\n`; out+=`• بيانات مسجلة: ${w.min} دقيقة تعلّم فعلي، ${w.sessions} جلسة، ${w.q} سؤال (${w.ind} مستقلة، ${w.ast} بمساعدة، ${w.rev} عُرض الحل)، واجبات: ${w.hwReviewed} مُراجَعة، ${w.hwDone} بانتظار المراجعة، ${w.hwLate} متأخرة.\n`; out+=`• مهارات متقنة: ${w.mastered.join('، ')||'—'}\n• تحتاج مراجعة: ${w.needs.join('، ')||'—'}\n• بيانات غير كافية: ${w.ins} مهارة\n• استنتاج البرنامج: ${w.rec.text}\n`; });
+  return out;
+}
+function weekly(c){
+  const end=localDate(), start=addDays(end,-6); let min=0; for(let i=0;i<7;i++) min+=minutes(c.activity[addDays(start,i)]||0);
+  const inWeek=ts=>{ const d=localDate(new Date(ts)); return d>=start&&d<=end; };
+  const at=c.attempts.filter(a=>inWeek(a.ts)); const stats=skillStats(c);
+  return {min,sessions:c.sessions.filter(s=>inWeek(s.ts)).length,q:at.length,ind:at.filter(a=>a.result==='independent').length,ast:at.filter(a=>a.result==='assisted').length,rev:at.filter(a=>a.result==='revealed').length,
+    hwReviewed:c.homework.filter(h=>h.status==='parent_reviewed').length,hwDone:c.homework.filter(h=>h.status==='child_done').length,hwLate:todayItems(c).late.length,
+    mastered:stats.filter(s=>s.status==='mastered').map(s=>s.skill),needs:stats.filter(s=>s.status==='needs_review').map(s=>s.skill),ins:stats.filter(s=>s.status==='insufficient').length,rec:recommendation(c)};
+}
+function pWeekly(){
+  const end=localDate(), start=addDays(end,-6);
+  return `<div class="stack">
+    <div class="row no-print"><button class="btn-sm btn-primary" data-act="copyWeekly">📋 نسخ الملخص كنص</button>${IN_ARTIFACT?'<span class="small muted">لحفظ الملخص كـ PDF أو صورة: افتح نسخة الملف المحمّلة على جهازك (طباعة ← حفظ كـ PDF)، أو التقط لقطة شاشة لهذه الصفحة.</span>':'<button class="btn-sm btn-ghost" data-act="printWeekly">🖨️ طباعة / حفظ PDF</button>'}</div>
+    <div class="card stack" id="weeklyCard"><h2>الملخص الأسبوعي</h2><p class="muted small">${fmtDate(start)} — ${fmtDate(end)} · «بيانات مسجلة» = ما حدث فعلًا، «استنتاج» = تفسير البرنامج ويحتاج حكمك.</p>
+    ${childList().map(c=>{ const w=weekly(c); return `<div class="card soft stack"><h3>${c.avatar} ${esc(c.name)} <span class="tag">${esc(c.gradeLabel)}</span></h3>
+      <div class="eyebrow">بيانات مسجلة</div>
+      <div class="kpi"><div class="k"><b>${w.min} د</b><span>تعلّم فعلي</span></div><div class="k"><b>${w.sessions}</b><span>جلسات</span></div><div class="k"><b>${w.q}</b><span>أسئلة</span></div><div class="k"><b>${w.ind}/${w.ast}/${w.rev}</b><span>مستقلة / بمساعدة / عُرض الحل</span></div></div>
+      <div class="small">واجبات: ${w.hwReviewed} مُراجَعة · ${w.hwDone} بانتظار المراجعة · ${w.hwLate} متأخرة</div>
+      <div class="small">✅ متقنة: ${w.mastered.map(esc).join('، ')||'—'}<br>⚠️ تحتاج مراجعة: ${w.needs.map(esc).join('، ')||'—'}<br>… بيانات غير كافية: ${w.ins} مهارة</div>
+      <div class="eyebrow">استنتاج البرنامج</div><div class="note small">${esc(w.rec.text)}</div></div>`; }).join('')}
+    <p class="small muted">لا تُعرض نسب تحسن لأن الأسبوع الواحد لا يوفر أساسًا للمقارنة؛ ستظهر مقارنة أسبوعين عندما يتوفر أسبوعان من البيانات على الأقل.</p>
+    </div></div>`;
+}
+function pSettings(){
+  return `<div class="stack">
+    <div class="grid-2">
+      <div class="card stack"><h2>الصوت والحركة</h2>
+        <label class="task"><input type="checkbox" data-act="setSound" ${S.settings.sound?'checked':''}><span class="t">تعليمات صوتية (قراءة النصوص) ${(arVoice||nativeTTS())?'<span class="chip good">متاح صوت عربي على هذا الجهاز</span>':'<span class="chip warn">لا يتوفر صوت عربي في هذا المتصفح، فلن يظهر زر الصوت</span>'}</span></label>
+        <label class="task"><input type="checkbox" data-act="setMotion" ${S.settings.motion?'checked':''}><span class="t">الحركات والانتقالات البسيطة</span></label>
+        <h3>ألوان كل طفل</h3>${childList().map(c=>`<div class="row"><span style="min-width:70px">${esc(c.name)}</span><select data-act="setThemeP" data-cid="${c.id}" style="flex:1">${Object.keys(THEMES).map(k=>`<option value="${k}" ${c.theme===k?'selected':''}>${THEMES[k]}</option>`).join('')}</select></div>`).join('')}
+      </div>
+      <div class="card stack"><h2>رمز ولي الأمر</h2><div class="row"><input id="newPin" inputmode="numeric" maxlength="4" placeholder="رمز جديد من 4 أرقام" style="flex:1"><button class="btn-sm btn-primary" data-act="changePin">تغيير</button></div>
+        <h3>أين تُحفظ البيانات؟</h3><p class="small">كل شيء (الدروس، الصور، المحاولات) محفوظ داخل متصفح هذا الجهاز فقط. لا يُرسل أي شيء إلى خادم أو خدمة خارجية، ولا يصل إلى أجهزة أخرى. امسح بيانات المتصفح وستُمسح معها. استخدم «تصدير» للاحتفاظ بنسخة.</p>
+      </div>
+    </div>
+    <div class="card stack"><h2>تصدير / استيراد / حذف</h2>
+      <div class="row"><button class="btn-sm" data-act="exportData">⬇️ تصدير كل البيانات (JSON)</button><label class="btn btn-sm" style="cursor:pointer">📂 استيراد نسخة<input type="file" id="importIn" accept="application/json" style="display:none" data-act="importData"></label></div>
+      ${view.exportText?`<textarea id="exportBox" style="min-height:120px;direction:ltr;font-size:.8rem">${esc(view.exportText)}</textarea><div class="row"><button class="btn-sm" data-act="copyExport">نسخ النص</button>${IN_ARTIFACT?'<span class="small muted">احفظ النص في ملف على جهازك.</span>':`<a class="btn btn-sm" id="dlLink" download="rihla-backup.json">تنزيل الملف</a>`}</div>`:''}
+      <div class="row">${childList().map(c=>`<button class="btn-sm btn-danger" data-act="wipeChild" data-cid="${c.id}">حذف بيانات ${esc(c.name)}</button>`).join('')}<button class="btn-sm btn-danger" data-act="wipeAll">حذف كل شيء</button></div>
+      ${view.confirmWipe?`<div class="card soft"><b>تأكيد:</b> سيُحذف ${view.confirmWipe==='all'?'كل البيانات':'بيانات '+esc(child(view.confirmWipe).name)} نهائيًا. <button class="btn-sm btn-danger" data-act="wipeConfirm">نعم، احذف</button> <button class="btn-sm" data-act="wipeCancel">إلغاء</button></div>`:''}
+    </div>
+  </div>`;
+}
+
+/* ---------------- الأحداث ---------------- */
+function bindAfterRender(){
+  const sIn=$('#shortIn'); if(sIn){ sIn.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); act('check',{}); } }); sIn.addEventListener('input',()=>{ session.cur.text=sIn.value; }); if(!session.cur.done) sIn.focus(); }
+  const dl=$('#dlLink'); if(dl&&view.exportText){ dl.href='data:application/json;charset=utf-8,'+encodeURIComponent(view.exportText); }
+  const imp=$('#importIn'); if(imp){ imp.addEventListener('change',importData); }
+  document.querySelectorAll('select[data-act]').forEach(s=>s.addEventListener('change',()=>act(s.dataset.act,s.dataset,s)));
+  document.querySelectorAll('input[type=checkbox][data-act]').forEach(s=>s.addEventListener('change',()=>act(s.dataset.act,s.dataset,s)));
+}
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-act]'); if(!b||b.tagName==='SELECT'||(b.tagName==='INPUT')) return; act(b.dataset.act,b.dataset,b); });
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.classList.contains('profile')) act('pick',e.target.dataset); if(view.name==='pin'&&/^[0-9]$/.test(e.key)) act('pinKey',{k:e.key}); if(view.name==='pin'&&e.key==='Backspace') act('pinDel',{}); });
+function readFiles(input,cb){
+  const files=Array.from(input&&input.files||[]); if(!files.length) return cb([]);
+  const out=[]; let i=0; const errs=[];
+  (function next(){ if(i>=files.length) return cb(out,errs); const f=files[i++]; if(f.size>1.5*1024*1024){ errs.push(f.name+' أكبر من 1.5 م.ب'); return next(); } const r=new FileReader(); r.onload=()=>{ out.push({name:f.name,data:r.result}); next(); }; r.onerror=()=>{ errs.push(f.name); next(); }; r.readAsDataURL(f); })();
+}
+function act(a,d,el){
+  const c=currentChildId?child():null;
+  switch(a){
+    case 'home': currentChildId=null; session=null; go('home'); break;
+    case 'pick': currentChildId=d.id; go('child'); break;
+    case 'child': session=null; go('child'); break;
+    case 'say': speak(d.text); break;
+    case 'sayScreen': { const s=$('#speakable'); if(s) speak(s.textContent); break; }
+    case 'themePick': go('themePick'); break;
+    case 'setTheme': c.theme=d.k; save(); go('child'); break;
+    case 'badges': go('badges'); break;
+    case 'lessons': go('lessons'); break;
+    case 'notes': go('notes'); break;
+    case 'plan': go('plan'); break;
+    case 'hw': go('hw'); break;
+    case 'hwItem': go('hwItem',{id:d.id}); break;
+    case 'hwHelp': view.help=!view.help; render(); break;
+    case 'hwStatus': { const h=c.homework.find(x=>x.id===d.id); setHW(c,h,d.s,'child'); if(d.s==='child_done') toast('رائع! سيراجعه ولي الأمر'); render(); break; }
+    case 'placement': startSession(null,'placement'); break;
+    case 'skipPlacement': c.placed=true; save(); render(); break;
+    case 'startLesson': startSession(d.id,'lesson'); break;
+    case 'startReview': startSession(null,'review'); break;
+    case 'exitSession': { if(session&&session.cur&&!session.cur.done){ /* unfinished question is not recorded */ } save(); session=null; go('child'); break; }
+    case 'step': session.step=d.s; if(d.s==='practice'&&!session.cur) initCur(); render(); break;
+    case 'hint': { const q=qOf(session.queue[session.idx]); const cur=session.cur; if(cur.hints<(q.hints||[]).length){ cur.fb={kind:'hint',text:'💡 '+q.hints[cur.hints]}; cur.hints++; render(); } break; }
+    case 'similar': { const q=qOf(session.queue[session.idx]); session.cur.fb={kind:'hint',text:q.similar}; session.cur.similarShown=true; session.cur.hints++; render(); break; }
+    case 'reveal': { const q=qOf(session.queue[session.idx]); const cur=session.cur; cur.revealed=true; cur.fb={kind:'reveal',text:'الحل: '+correctText(q)+' — '+(q.explain||'')+' حاول سؤالًا مشابهًا لاحقًا بنفسك.'}; if(q.type==='choice') cur.selected=q.answer; finishQuestion('revealed'); render(); break; }
+    case 'next': nextQuestion(); break;
+    case 'backFromBreak': go('session'); break;
+    case 'check': { const q=qOf(session.queue[session.idx]); const cur=session.cur; if(cur.done) break; if(q.type==='short'){ const v=$('#shortIn'); cur.text=v?v.value:cur.text; if(!cur.text.trim()){ cur.fb={kind:'hint',text:'اكتب إجابة أولًا'}; render(); break; } } if(q.type==='order'&&cur.seq.length<q.items.length){ cur.fb={kind:'hint',text:'أكمل ترتيب كل العناصر أولًا'}; render(); break; } if(checkAnswer(q,cur)) handleCorrect(q); else { handleWrong(q,q.type==='short'?cur.text:cur.seq.map(i=>q.items[i]).join(' ')); if(q.type==='order') cur.seq=[]; } render(); break; }
