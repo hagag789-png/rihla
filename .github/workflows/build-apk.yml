@@ -1,0 +1,48 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        run: |
+          base64 -d app/rihla.keystore.b64 > app/rihla.keystore
+          if [ ! -f app/src/main/assets/www/index.html ]; then
+            mkdir -p app/src/main/assets/www
+            cat www-src/index.part*.html > app/src/main/assets/www/index.html
+          fi
+          gradle assembleRelease --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk rihla.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rihla-apk
+          path: rihla.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest rihla.apk --title "رحلة المعرفة — أحدث نسخة" --notes "APK مبني تلقائيًا من آخر تعديل."
