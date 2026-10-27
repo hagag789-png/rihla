@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>رحلة المعرفة</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: one app shell; children get big single-column screens, the parent gets a tabbed dashboard. */
+:root{
+  --bg:#FAF9F6; --surface:#FFFFFF; --surface-2:#F1EFE9; --fg:#1F2328; --muted:#5B6470; --line:#DCD8CF;
+  --accent:#2F6F8F; --accent-2:#B5651D; --accent-fg:#FFFFFF; --accent-soft:#E3EEF4;
+  --good:#1E7F4F; --good-soft:#DDF3E6; --warn:#9A6700; --warn-soft:#FFF1CC; --bad:#B3261E; --bad-soft:#FBE0DE; --info:#3B5BDB; --info-soft:#E2E8FF;
+  --star:#E0A100; --shadow:0 2px 10px rgba(30,30,40,.08); --radius:16px;
+  --font:"Cairo","Segoe UI",Tahoma,Arial,sans-serif;
+  --ease:.18s ease;
+}
+/* child palettes (chosen by taste, not gender) */
+[data-theme-kid="sunny"]{ --accent:#E0761B; --accent-2:#1F9A8A; --accent-soft:#FFE9D1; --bg:#FFF8EC; --surface-2:#FBEFD9; }
+[data-theme-kid="ocean"]{ --accent:#1E63C8; --accent-2:#1F9A5A; --accent-soft:#DCE8FB; --bg:#F1F6FD; --surface-2:#E6EEF9; }
+[data-theme-kid="calm"]{ --accent:#3D6B8C; --accent-2:#7A5A9E; --accent-soft:#E1EAF1; --bg:#F4F6F8; --surface-2:#EAEEF2; }
+[data-theme-kid="forest"]{ --accent:#2E7D4F; --accent-2:#C96A3B; --accent-soft:#DDF0E3; --bg:#F3F8F3; --surface-2:#E7F0E8; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#15181C; --surface:#1E2227; --surface-2:#262B31; --fg:#ECEEF1; --muted:#A4ACB6; --line:#363C44;
+  --accent:#6FB2D6; --accent-2:#E0A15E; --accent-fg:#101316; --accent-soft:#23323B;
+  --good:#5ED39A; --good-soft:#163D2A; --warn:#F2C14E; --warn-soft:#3E3215; --bad:#F28B82; --bad-soft:#4A1F1C; --info:#8FA8FF; --info-soft:#1F2748;
+  --star:#F7C948; --shadow:0 2px 10px rgba(0,0,0,.4); color-scheme:dark;
+}
+  :root:not([data-theme="light"]) [data-theme-kid="sunny"]{ --accent:#F5A05A; --accent-2:#5BD0BF; --accent-soft:#3A2B1C; --bg:#1B1813; --surface-2:#2A241B; }
+  :root:not([data-theme="light"]) [data-theme-kid="ocean"]{ --accent:#7FB0F5; --accent-2:#5DD594; --accent-soft:#1E2B40; --bg:#131922; --surface-2:#1E2633; }
+  :root:not([data-theme="light"]) [data-theme-kid="calm"]{ --accent:#8DB6D1; --accent-2:#B79AD9; --accent-soft:#232E38; --bg:#161A1E; --surface-2:#22282E; }
+  :root:not([data-theme="light"]) [data-theme-kid="forest"]{ --accent:#7BCB97; --accent-2:#F0A078; --accent-soft:#1F3328; --bg:#141A16; --surface-2:#1F2A22; }
+}
+:root[data-theme="dark"]{
+  --bg:#15181C; --surface:#1E2227; --surface-2:#262B31; --fg:#ECEEF1; --muted:#A4ACB6; --line:#363C44;
+  --accent:#6FB2D6; --accent-2:#E0A15E; --accent-fg:#101316; --accent-soft:#23323B;
+  --good:#5ED39A; --good-soft:#163D2A; --warn:#F2C14E; --warn-soft:#3E3215; --bad:#F28B82; --bad-soft:#4A1F1C; --info:#8FA8FF; --info-soft:#1F2748;
+  --star:#F7C948; --shadow:0 2px 10px rgba(0,0,0,.4); color-scheme:dark;
+}
+:root[data-theme="dark"] [data-theme-kid="sunny"]{ --accent:#F5A05A; --accent-2:#5BD0BF; --accent-soft:#3A2B1C; --bg:#1B1813; --surface-2:#2A241B; }
+:root[data-theme="dark"] [data-theme-kid="ocean"]{ --accent:#7FB0F5; --accent-2:#5DD594; --accent-soft:#1E2B40; --bg:#131922; --surface-2:#1E2633; }
+:root[data-theme="dark"] [data-theme-kid="calm"]{ --accent:#8DB6D1; --accent-2:#B79AD9; --accent-soft:#232E38; --bg:#161A1E; --surface-2:#22282E; }
+:root[data-theme="dark"] [data-theme-kid="forest"]{ --accent:#7BCB97; --accent-2:#F0A078; --accent-soft:#1F3328; --bg:#141A16; --surface-2:#1F2A22; }
+
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:17px;line-height:1.7;font-variant-numeric:tabular-nums;direction:rtl}
+*{box-sizing:border-box}
+#app{min-height:100%;background:var(--bg);color:var(--fg);transition:background var(--ease)}
+.wrap{max-width:960px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 40px}
+.wrap.narrow{max-width:640px}
+h1,h2,h3{line-height:1.3;text-wrap:balance;margin:0}
+h1{font-size:1.6rem;font-weight:800}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:1.05rem;font-weight:700}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:.9rem}
+.eyebrow{font-size:.8rem;letter-spacing:.04em;color:var(--muted);font-weight:700}
+.ltr{direction:ltr;text-align:left;unicode-bidi:isolate}
+.topbar{display:flex;align-items:center;gap:10px;padding-block:8px;position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5}
+.topbar .grow{flex:1;min-width:0}
+.topbar h1{font-size:1.2rem}
+button,.btn{font:inherit;cursor:pointer;border:0;border-radius:14px;min-height:48px;padding:10px 18px;background:var(--surface-2);color:var(--fg);font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:transform var(--ease),background var(--ease);text-decoration:none}
+button:hover{filter:brightness(.97)}
+button:active{transform:scale(.98)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:3px solid var(--accent-2);outline-offset:2px}
+.btn-primary{background:var(--accent);color:var(--accent-fg)}
+.btn-accent2{background:var(--accent-2);color:var(--accent-fg)}
+.btn-ghost{background:transparent;border:2px solid var(--line)}
+.btn-danger{background:var(--bad-soft);color:var(--bad)}
+.btn-sm{min-height:40px;padding:6px 12px;font-size:.9rem;border-radius:10px}
+.btn-icon{min-width:48px;padding:8px;font-size:1.4rem}
+.btn-big{min-height:72px;font-size:1.25rem;border-radius:22px;width:100%}
+.btn-huge{min-height:110px;font-size:1.5rem;border-radius:26px;width:100%;flex-direction:column;gap:4px}
+.btn-huge .ic{font-size:2.4rem;line-height:1}
+button[disabled]{opacity:.5;cursor:not-allowed}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.grid-2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;min-width:0}
+.card.soft{background:var(--surface-2);border-color:transparent}
+.card.accent{border-color:var(--accent);background:var(--accent-soft)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;font-size:.82rem;font-weight:700;background:var(--surface-2);color:var(--fg);border:1px solid var(--line);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.chip.good{background:var(--good-soft);color:var(--good);border-color:transparent}
+.chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.chip.info{background:var(--info-soft);color:var(--info);border-color:transparent}
+.chip.demo{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.chip.accent{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.tag{font-size:.78rem;color:var(--muted)}
+input,select,textarea{font:inherit;width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);min-height:48px}
+textarea{min-height:96px;resize:vertical}
+label.f{display:block;font-weight:700;font-size:.9rem;margin-bottom:4px}
+.field{min-width:0}
+.pill-tabs{display:flex;gap:6px;flex-wrap:wrap;padding-block:6px}
+.pill-tabs button{min-height:40px;padding:6px 14px;border-radius:999px;font-size:.92rem}
+.pill-tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-fg)}
+.profile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:22px 14px;border-radius:24px;background:var(--surface);border:2px solid var(--line);cursor:pointer;min-height:170px;text-align:center}
+.profile:hover{border-color:var(--accent)}
+.profile .av{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font-size:2.2rem;background:var(--accent-soft)}
+.profile .nm{font-size:1.3rem;font-weight:800}
+.stars{color:var(--star);font-weight:800}
+.progress{height:10px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.progress > span{display:block;height:100%;background:var(--accent);border-radius:999px;transition:width .3s ease}
+.q-visual{font-size:2.6rem;line-height:1.4;letter-spacing:.1em;text-align:center;padding:10px;word-break:break-word}
+.q-prompt{font-size:1.25rem;font-weight:700}
+.junior .q-prompt{font-size:1.5rem}
+.junior .q-visual{font-size:3.2rem}
+.opts{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.opt{min-height:64px;font-size:1.2rem;background:var(--surface);border:2px solid var(--line);border-radius:18px}
+.junior .opt{min-height:88px;font-size:1.6rem}
+.opt.selected{border-color:var(--accent);background:var(--accent-soft)}
+.opt.correct{border-color:var(--good);background:var(--good-soft)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.opt.matched{border-color:var(--good);background:var(--good-soft);opacity:.75}
+.match{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.match .col{display:flex;flex-direction:column;gap:10px}
+.order-seq{display:flex;flex-wrap:wrap;gap:8px;min-height:56px;padding:8px;border:2px dashed var(--line);border-radius:14px;align-items:center}
+.order-seq .tok{background:var(--accent-soft);border-radius:10px;padding:4px 12px;font-weight:700}
+.feedback{padding:12px 14px;border-radius:14px;font-weight:600}
+.feedback.good{background:var(--good-soft);color:var(--good)}
+.feedback.hint{background:var(--info-soft);color:var(--info)}
+.feedback.try{background:var(--warn-soft);color:var(--warn)}
+.feedback.reveal{background:var(--surface-2)}
+.steps{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.steps .st{padding:4px 12px;border-radius:999px;background:var(--surface-2);font-size:.85rem;font-weight:700;color:var(--muted)}
+.steps .st.on{background:var(--accent);color:var(--accent-fg)}
+.steps .st.done{background:var(--good-soft);color:var(--good)}
+.lesson-text{white-space:pre-line}
+.journey{display:flex;gap:6px;align-items:center;overflow-x:auto;padding-block:6px}
+.journey .node{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);flex:none;font-size:1.1rem;border:2px solid var(--line)}
+.journey .node.done{background:var(--good-soft);border-color:var(--good)}
+.journey .node.now{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.journey .seg{width:18px;height:3px;background:var(--line);flex:none}
+.plan{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(120px,1fr))}
+.plan .day{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px;min-height:90px}
+.plan .day.today{border-color:var(--accent);border-width:2px}
+.plan .day h4{margin:0 0 4px;font-size:.9rem}
+.task{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+.task:last-child{border-bottom:0}
+.task input[type=checkbox]{width:24px;height:24px;min-height:0;margin-top:6px;flex:none}
+.task .t{flex:1;min-width:0}
+.task.done .t{text-decoration:line-through;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:.82rem;color:var(--muted)}
+.tbl{overflow-x:auto}
+.kpi{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(105px,1fr))}
+.kpi .k{background:var(--surface-2);border-radius:12px;padding:10px 12px}
+.kpi .k b{display:block;font-size:1.4rem;line-height:1.2}
+.kpi .k span{font-size:.82rem;color:var(--muted)}
+.note{background:var(--surface-2);border-right:4px solid var(--accent-2);padding:10px 14px;border-radius:10px;font-size:.92rem}
+.pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:300px;margin:0 auto}
+.pinpad button{min-height:64px;font-size:1.4rem}
+.pin-dots{display:flex;gap:12px;justify-content:center;font-size:2rem;letter-spacing:.2em;min-height:48px}
+.attach img{max-width:100%;border-radius:10px;border:1px solid var(--line)}
+.sep{border:0;border-top:1px solid var(--line);margin:4px 0}
+.toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:700;z-index:50;box-shadow:var(--shadow);max-width:90vw}
+.celebrate{font-size:3rem;text-align:center;line-height:1.2}
+.reduce *{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important} }
+@keyframes pop{0%{transform:scale(.8)}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+.pop{animation:pop .35s ease}
+.print-only{display:none}
+@media print{
+  .no-print,.topbar{display:none!important}
+  .print-only{display:block}
+  body{background:#fff;color:#000}
+  .card{break-inside:avoid;border-color:#999}
+}
+@media (max-width:480px){
+  body{font-size:16px}
+  .match{grid-template-columns:1fr 1fr}
+  .btn-huge{min-height:96px;font-size:1.3rem}
+}
+</style>
+
+<div id="app" class="wrap"><p class="muted">جارٍ التحميل…</p></div>
+
+<script>
+/* =========================================================
+   رحلة المعرفة — نسخة أولى قابلة للتجربة
+   البيانات تُحفظ محليًا في متصفح هذا الجهاز (localStorage) فقط.
+   ========================================================= */
+(function(){
+'use strict';
+const STORAGE_KEY='rihla.v1';
+const IN_ARTIFACT = /claude\.ai$/.test(location.hostname) || /claudeusercontent\.com$/.test(location.hostname) || location.hostname.includes('claude');
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+const pad2 = n => String(n).padStart(2,'0');
+function localDate(d){ d=d||new Date(); return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+function addDays(ds,n){ const d=new Date(ds+'T12:00:00'); d.setDate(d.getDate()+n); return localDate(d); }
+const DAYS_AR=['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+function dayName(ds){ return DAYS_AR[new Date(ds+'T12:00:00').getDay()]; }
+function fmtDate(ds){ if(!ds) return '—'; const [y,m,d]=ds.split('-'); return `${d}/${m}/${y}`; }
+function fmtTime(ts){ const d=new Date(ts); return `${fmtDate(localDate(d))} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function minutes(sec){ return Math.round((sec||0)/60); }
+function shuffle(arr,seed){ const a=arr.slice(); let s=seed||1; for(let i=a.length-1;i>0;i--){ s=(s*9301+49297)%233280; const j=Math.floor(s/233280*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function normalizeAr(s, strict){
+  s=String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+  s=s.replace(/[ً-ْٰ]/g,''); // تشكيل
+  s=s.replace(/[٠-٩]/g, d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  s=s.replace(/[،,.!؟?]/g,'');
+  if(!strict){ s=s.replace(/[أإآ]/g,'ا').replace(/ى/g,'ي'); }
+  return s;
+}
+
+/* ---------------- المحتوى التجريبي (موسوم بوضوح) ---------------- */
+const DEMO_LESSONS = {
+ nermeen:[
+  { id:'n-ar-ta', subject:'لغة عربية', unit:'وحدة أسرتي', title:'حرف التاء (ت)', lang:'ar', source:'extra',
+    objectives:['أتعرف على شكل حرف التاء وصوته','أميّز الكلمات التي تبدأ بحرف التاء'],
+    concepts:['حرف التاء','نقطتان فوق الحرف'],
+    explain:'هذا حرف التاء: ت\nننطقه: تَ\nله نقطتان فوقه.\nكلمات تبدأ بالتاء: تُفّاحة 🍎 ، تِمساح 🐊 ، تاج 👑',
+    example:{q:'كلمة «تُفّاحة» تبدأ بأي حرف؟', steps:['نقول الكلمة ببطء: تُ... فّاحة','أول صوت هو تُ','إذن تبدأ بحرف التاء ت'], a:'ت'},
+    questions:[
+      {id:'q1',type:'choice',skill:'التعرف على صوت حرف التاء',level:'تذكر',difficulty:1,prompt:'أي صورة تبدأ بحرف التاء؟',options:['🍎 تفاحة','🦆 بطة','🐟 سمكة'],answer:0,hints:['قولي اسم كل صورة واسمعي أول صوت'],explain:'تفاحة تبدأ بصوت تَ.'},
+      {id:'q2',type:'choice',skill:'التعرف على صوت حرف التاء',level:'تذكر',difficulty:1,prompt:'أي حرف له نقطتان فوقه؟',options:['ب','ت','ن'],answer:1,hints:['الباء نقطتها تحت، والنون نقطة واحدة فوق'],explain:'التاء ت لها نقطتان فوقها.'},
+      {id:'q3',type:'match',skill:'التعرف على صوت حرف التاء',level:'فهم',difficulty:2,prompt:'صِلي كل حرف بالصورة التي تبدأ به',pairs:[['ت','🐊 تمساح'],['ب','🏠 بيت'],['د','🐔 دجاجة']],hints:['تمساح تبدأ بصوت تِ'],explain:'ت ← تمساح، ب ← بيت، د ← دجاجة.'},
+      {id:'q4',type:'order',skill:'ترتيب حروف كلمة',level:'تطبيق',difficulty:2,prompt:'رتّبي الحروف لتكوّني كلمة «تِين»',items:['ن','ت','ي'],answer:[1,2,0],hints:['أول صوت في تِين هو تِ'],explain:'تِين = ت ثم ي ثم ن.'}
+    ]},
+  { id:'n-ar-ba', subject:'لغة عربية', unit:'وحدة حيواناتي', title:'حرف الباء (ب)', lang:'ar', source:'extra',
+    objectives:['أتعرف على شكل حرف الباء وصوته','أميّز الكلمات التي تبدأ بحرف الباء','أرتّب حروفًا لأكوّن كلمة قصيرة'],
+    concepts:['حرف الباء','صوت الحرف في أول الكلمة'],
+    explain:'هذا حرف الباء: ب\nننطقه: بَ\nكلمات تبدأ بالباء: بَطّة 🦆 ، بَيت 🏠 ، بَلّونة 🎈',
+    example:{q:'كلمة «بَطّة» تبدأ بأي حرف؟', steps:['نقول الكلمة ببطء: بَ... طّة','أول صوت نسمعه هو بَ','إذن تبدأ بحرف الباء ب'], a:'ب'},
+    questions:[
+      {id:'q1',type:'choice',skill:'التعرف على صوت حرف الباء',level:'تذكر',difficulty:1,prompt:'أي صورة تبدأ بحرف الباء؟',options:['🦆 بطة','🍎 تفاحة','🐱 قطة'],answer:0,hints:['قولي اسم كل صورة ببطء واسمعي أول صوت','بَ... أي كلمة تبدأ بصوت بَ؟'],explain:'بَطّة تبدأ بصوت بَ، أما تفاحة فتبدأ بـ تَ وقطة بـ قِ.'},
+      {id:'q2',type:'choice',skill:'التعرف على صوت حرف الباء',level:'تذكر',difficulty:1,prompt:'كلمة «بَيت» تبدأ بأي حرف؟',visual:'🏠',options:['ب','ت','ن'],answer:0,hints:['اسمعي أول صوت: بَ...','شكل الحرف فيه نقطة واحدة تحت'],explain:'بَيت تبدأ بحرف الباء، وشكله ب بنقطة واحدة تحته.'},
+      {id:'q3',type:'match',skill:'التعرف على صوت حرف الباء',level:'فهم',difficulty:2,prompt:'صِلي كل حرف بالصورة التي تبدأ به',pairs:[['ب','🦆 بطة'],['ت','🍎 تفاحة'],['ن','⭐ نجمة']],hints:['ابدئي بالباء: أي صورة تبدأ بصوت بَ؟','تفاحة تبدأ بصوت تَ'],explain:'ب ← بطة، ت ← تفاحة، ن ← نجمة.'},
+      {id:'q4',type:'order',skill:'ترتيب حروف كلمة',level:'تطبيق',difficulty:2,prompt:'رتّبي الحروف لتكوّني كلمة «بِنت»',items:['ت','ب','ن'],answer:[1,2,0],hints:['أول صوت في بِنت هو بِ','بعد الباء يأتي صوت نْ'],similar:'مثال مشابه: كلمة «بَاب» تبدأ بـ ب ثم ا ثم ب.',explain:'بِنت = ب ثم ن ثم ت.'},
+      {id:'q5',type:'choice',skill:'ترتيب حروف كلمة',level:'تطبيق',difficulty:3,prompt:'أي كلمة مكتوبة بشكل صحيح وتعني 🎈؟',options:['بَلّونة','لَبّونة','نَبّولة'],answer:0,hints:['الكلمة تبدأ بصوت بَ'],explain:'بَلّونة تبدأ بالباء.'}
+    ]},
+  { id:'n-math-10', subject:'رياضيات', unit:'الفصل 1 و3 و4: الأعداد حتى 10، الجمع، الطرح', title:'العدّ والجمع والطرح حتى 10', lang:'ar', source:'extra',
+    objectives:['أعدّ الأشياء حتى 10','أجمع عددين بالصور','أطرح بالصور'],
+    concepts:['العدّ','الجمع بالتجميع','الطرح بالإزالة'],
+    explain:'عندما نعدّ، نلمس كل شيء مرة واحدة ونقول العدد.\n🍎 🍎 🍎 = 3\nالجمع: نضع المجموعتين معًا ونعدّ الكل.\nالطرح: نُبعد بعض الأشياء ونعدّ الباقي.',
+    example:{q:'🐟🐟 + 🐟🐟🐟 = ؟', steps:['نعدّ الأولى: 1 ، 2','نكمل العدّ مع الثانية: 3 ، 4 ، 5','الناتج 5'], a:'5'},
+    questions:[
+      {id:'q1',type:'choice',skill:'العدّ حتى 10',level:'تذكر',difficulty:1,prompt:'كم تفاحة هنا؟',visual:'🍎🍎🍎🍎',options:['3','4','5'],answer:1,hints:['المسي كل تفاحة وقولي: 1 ، 2 ، 3 ...'],explain:'هناك 4 تفاحات.'},
+      {id:'q2',type:'choice',skill:'العدّ حتى 10',level:'تذكر',difficulty:2,prompt:'كم سمكة هنا؟',visual:'🐟🐟🐟🐟🐟🐟🐟',options:['6','7','8'],answer:1,hints:['عدّي ببطء ولا تنسي أي سمكة','عدّي حتى 5 ثم أكملي: 6 ، 7'],explain:'7 سمكات.'},
+      {id:'q3',type:'choice',skill:'جمع عددين ضمن 10 (مصوّر)',level:'تطبيق',difficulty:1,prompt:'🍎🍎 + 🍎🍎🍎 = ؟',options:['4','5','6'],answer:1,hints:['عدّي الكل معًا: 1 ، 2 ، ثم 3 ، 4 ، 5'],similar:'مثال مشابه: 🍌🍌 + 🍌 = 3',explain:'2 + 3 = 5.'},
+      {id:'q4',type:'choice',skill:'جمع عددين ضمن 10 (مصوّر)',level:'تطبيق',difficulty:2,prompt:'🚗🚗🚗🚗 + 🚗 = ؟',options:['4','5','6'],answer:1,hints:['عندنا 4 ثم نزيد واحدة'],explain:'4 + 1 = 5.'},
+      {id:'q5',type:'choice',skill:'طرح ضمن 10 (مصوّر)',level:'تطبيق',difficulty:2,prompt:'كان عندك 5 بالونات 🎈🎈🎈🎈🎈 وطارت 2. كم بقي؟',options:['2','3','4'],answer:1,hints:['غطّي بالونتين بيدك وعدّي الباقي'],similar:'مثال مشابه: 4 حلوى 🍬🍬🍬🍬 أكلتِ 1 ← يبقى 3',explain:'5 − 2 = 3.'}
+    ]}
+ ],
+ omar:[
+  { id:'o-ar-ishara', subject:'لغة عربية', unit:'المحور الأول: من أكون؟', title:'أسماء الإشارة', lang:'ar', source:'extra',
+    objectives:['أتعرف على أسماء الإشارة للقريب والبعيد','أختار اسم الإشارة المناسب للمفرد والمثنى والجمع'],
+    concepts:['هذا، هذه','هذان، هاتان','هؤلاء','ذلك، تلك'],
+    explain:'اسم الإشارة كلمة نشير بها إلى شيء:\nللقريب: هذا (للمفرد المذكر) ، هذه (للمفرد المؤنث) ، هذان (للمثنى المذكر) ، هاتان (للمثنى المؤنث) ، هؤلاء (للجمع العاقل).\nللبعيد: ذلك (مذكر) ، تلك (مؤنث).\nأمثلة: هذا كتاب. هذه شجرة. هذان ولدان. هاتان بنتان. هؤلاء تلاميذ. ذلك جبل بعيد.',
+    example:{q:'أكمل: ___ معلمةٌ نشيطة.', steps:['الكلمة «معلمة» مفرد مؤنث','اسم الإشارة للمفرد المؤنث القريب هو هذه','هذه معلمةٌ نشيطة'], a:'هذه'},
+    questions:[
+      {id:'q1',type:'choice',skill:'اختيار اسم الإشارة المناسب',level:'فهم',difficulty:1,prompt:'___ قلمٌ جديد.',options:['هذا','هذه','هؤلاء'],answer:0,hints:['قلم: مفرد مذكر'],explain:'هذا للمفرد المذكر.'},
+      {id:'q2',type:'choice',skill:'اختيار اسم الإشارة المناسب',level:'فهم',difficulty:1,prompt:'___ حديقةٌ جميلة.',options:['هذا','هذه','هذان'],answer:1,hints:['حديقة: مفرد مؤنث'],explain:'هذه للمفرد المؤنث.'},
+      {id:'q3',type:'choice',skill:'اختيار اسم الإشارة المناسب',level:'تطبيق',difficulty:2,prompt:'___ تلميذان مجتهدان.',options:['هذه','هذان','هاتان'],answer:1,hints:['تلميذان: مثنى مذكر'],explain:'هذان للمثنى المذكر.'},
+      {id:'q4',type:'choice',skill:'اختيار اسم الإشارة المناسب',level:'تطبيق',difficulty:2,prompt:'___ لاعبون ماهرون.',options:['هذا','هذان','هؤلاء'],answer:2,hints:['لاعبون: جمع'],explain:'هؤلاء للجمع.'},
+      {id:'q5',type:'match',skill:'اختيار اسم الإشارة المناسب',level:'فهم',difficulty:2,prompt:'صِل كل اسم إشارة بما يناسبه',pairs:[['هاتان','بنتان'],['تلك','شجرة بعيدة'],['هذا','ولد']],hints:['هاتان للمثنى المؤنث'],explain:'هاتان بنتان، تلك شجرة بعيدة، هذا ولد.'},
+      {id:'q6',type:'short',skill:'اختيار اسم الإشارة المناسب',level:'تطبيق',difficulty:3,prompt:'اكتب اسم الإشارة المناسب: ___ جبلٌ بعيد.',accept:['ذلك'],hints:['الجبل بعيد ومذكر'],explain:'ذلك للمفرد المذكر البعيد.'}
+    ]},
+  { id:'o-math-clock', subject:'رياضيات', unit:'الفصل الثاني: قراءة الساعة', title:'قراءة الساعة: الساعة والنصف والربع', lang:'ar', source:'extra',
+    objectives:['أميّز عقرب الساعات من عقرب الدقائق','أقرأ الساعة الكاملة والنصف والربع','أعرف أن الساعة 60 دقيقة'],
+    concepts:['عقرب الساعات القصير','عقرب الدقائق الطويل','الساعة = 60 دقيقة'],
+    explain:'في الساعة عقربان: القصير يشير إلى الساعات، والطويل إلى الدقائق.\nالساعة الواحدة = 60 دقيقة. نصف الساعة = 30 دقيقة. ربع الساعة = 15 دقيقة.\nعندما يشير العقرب الطويل إلى 12 تكون الساعة كاملة، وإلى 6 تكون «والنصف»، وإلى 3 تكون «والربع».\nمثال: القصير على 4 والطويل على 6 ← الرابعة والنصف (4:30).',
+    example:{q:'العقرب القصير على 7 والطويل على 3. كم الساعة؟', steps:['القصير على 7 ← الساعة السابعة','الطويل على 3 ← 15 دقيقة (ربع)','الساعة السابعة والربع: 7:15'], a:'7:15'},
+    questions:[
+      {id:'q1',type:'choice',skill:'قراءة الساعة الكاملة والنصف والربع',level:'تذكر',difficulty:1,prompt:'العقرب القصير على 3 والطويل على 12. كم الساعة؟',options:['3:00','12:03','3:30'],answer:0,hints:['الطويل على 12 معناه ساعة كاملة'],explain:'الساعة الثالثة تمامًا 3:00.'},
+      {id:'q2',type:'choice',skill:'قراءة الساعة الكاملة والنصف والربع',level:'فهم',difficulty:2,prompt:'العقرب القصير بين 9 و10 والطويل على 6. كم الساعة؟',options:['9:30','10:30','6:09'],answer:0,hints:['الطويل على 6 معناه «والنصف»','القصير تجاوز 9 ولم يصل 10'],explain:'التاسعة والنصف 9:30.'},
+      {id:'q3',type:'short',skill:'تحويل وحدات الزمن',level:'تذكر',difficulty:1,prompt:'كم دقيقة في الساعة الواحدة؟',accept:['60'],hints:['أكثر من 50 وأقل من 70'],explain:'الساعة = 60 دقيقة.'},
+      {id:'q4',type:'short',skill:'تحويل وحدات الزمن',level:'تطبيق',difficulty:2,prompt:'كم دقيقة في ساعتين؟',accept:['120'],hints:['60 + 60'],explain:'ساعتان = 120 دقيقة.'},
+      {id:'q5',type:'choice',skill:'قراءة الساعة الكاملة والنصف والربع',level:'تطبيق',difficulty:3,prompt:'بدأ عمر المذاكرة في 5:00 واستمر نصف ساعة. متى انتهى؟',options:['5:15','5:30','6:00'],answer:1,hints:['نصف ساعة = 30 دقيقة'],explain:'5:00 + 30 دقيقة = 5:30.'}
+    ]},
+  { id:'o-ar-ant', subject:'لغة عربية', unit:'وحدة تجريبية 1', title:'قراءة: النملة والحبوب', lang:'ar',
+    objectives:['أستخرج معلومة من نص قصير','أحدّد الفكرة الرئيسية','أميّز التاء المربوطة من الهاء'],
+    concepts:['الفهم القرائي','الفكرة الرئيسية','التاء المربوطة والهاء'],
+    explain:'اقرأ النص (نص تجريبي قصير):\n«في فصل الصيف، كانت نملة صغيرة تعمل طوال اليوم. تجمع حبوب القمح وتحملها إلى بيتها تحت الأرض. وعندما جاء الشتاء وغطّى الثلج الأرض، كان عند النملة طعام كثير، فلم تجُع. وقالت النملة: من يعمل في الصيف، يأكل في الشتاء.»\n\nكيف أجد الفكرة الرئيسية؟ أسأل نفسي: عمّ يتكلم النص كله، لا جملة واحدة فقط؟\nالتاء المربوطة (ة) تأتي في آخر الكلمة وتُنطق هاء عند الوقف وتاء عند الوصل: نملة ← نملةٌ. أما الهاء (ه) فتبقى هاء دائمًا: بيته.',
+    example:{q:'أين كانت النملة تحمل الحبوب؟', steps:['أبحث في النص عن كلمة «تحملها»','أجد: «تحملها إلى بيتها تحت الأرض»','الإجابة: إلى بيتها تحت الأرض'], a:'إلى بيتها تحت الأرض'},
+    questions:[
+      {id:'q1',type:'choice',skill:'الفهم القرائي: استخراج معلومة',level:'فهم',difficulty:1,prompt:'ماذا كانت تجمع النملة؟',options:['حبوب القمح','أوراق الشجر','قطرات الماء'],answer:0,hints:['ارجع إلى الجملة الثانية في النص'],explain:'النص يقول: تجمع حبوب القمح.'},
+      {id:'q2',type:'choice',skill:'الفهم القرائي: استخراج معلومة',level:'فهم',difficulty:1,prompt:'في أي فصل كانت النملة تعمل؟',options:['الشتاء','الصيف','الربيع'],answer:1,hints:['ابحث عن كلمة «فصل» في أول النص'],explain:'في فصل الصيف.'},
+      {id:'q3',type:'choice',skill:'استخراج الفكرة الرئيسية',level:'استنتاج',difficulty:2,prompt:'ما الفكرة الرئيسية للنص؟',options:['الشتاء فصل بارد','من يعمل ويدّخر مبكرًا لا يحتاج لاحقًا','النمل يعيش تحت الأرض'],answer:1,hints:['الفكرة الرئيسية تلخّص النص كله لا جملة واحدة','انظر إلى ما قالته النملة في النهاية'],explain:'النص كله يدور حول العمل في الصيف ليجد الطعام في الشتاء.'},
+      {id:'q4',type:'order',skill:'الفهم القرائي: استخراج معلومة',level:'تطبيق',difficulty:2,prompt:'رتّب الكلمات لتكوّن جملة صحيحة',items:['الحبوب','النملة','في الصيف','تجمع'],answer:[1,3,0,2],hints:['الجملة تبدأ بمن يقوم بالفعل: النملة','بعد الفاعل يأتي الفعل: تجمع'],explain:'النملة تجمع الحبوب في الصيف.'},
+      {id:'q5',type:'match',skill:'الفهم القرائي: استخراج معلومة',level:'فهم',difficulty:2,prompt:'صِل كل كلمة بمعناها',pairs:[['مجتهدة','تعمل بجد'],['تدّخر','تحتفظ بالشيء لوقت الحاجة'],['الحبوب','بذور مثل القمح']],hints:['ابدأ بالكلمة التي تعرفها أكثر'],explain:'مجتهدة = تعمل بجد، تدّخر = تحتفظ لوقت الحاجة، الحبوب = بذور كالقمح.'},
+      {id:'q6',type:'choice',skill:'الإملاء: التاء المربوطة والهاء',level:'تطبيق',difficulty:2,prompt:'أي كتابة صحيحة؟',options:['نملة','نمله'],answer:0,strict:true,hints:['انطق الكلمة مع التنوين: نملـ...ـةٌ. هل تسمع تاء؟'],explain:'نملة بتاء مربوطة لأننا ننطقها تاء عند الوصل (نملةٌ).'},
+      {id:'q7',type:'choice',skill:'الإملاء: التاء المربوطة والهاء',level:'تطبيق',difficulty:3,prompt:'«تحمل الحبوب إلى ...» أي كتابة صحيحة؟',options:['بيتة','بيته'],answer:1,strict:true,hints:['الهاء هنا ضمير يعود على النملة: بيتُـها / بيتُـه','جرّب نطقها مع الوصل: بيتُهُ تحت الأرض. تبقى هاء'],explain:'بيته: الهاء ضمير يُنطق هاء دائمًا، فلا نكتبه تاء مربوطة.'}
+    ]},
+  { id:'o-math-mul', subject:'رياضيات', unit:'الفصل الأول: خصائص الضرب وجداول الأعداد', title:'الضرب في 3 و 4', lang:'ar', source:'extra',
+    objectives:['أتذكر جدول 3 و 4','أحل مسألة لفظية بالضرب','أشرح خطوات الحل'],
+    concepts:['الضرب = جمع متكرر','جدول الضرب'],
+    explain:'الضرب جمع متكرر:\n4 × 3 يعني 4 + 4 + 4 = 12\nجدول 3: 3، 6، 9، 12، 15، 18، 21، 24، 27، 30\nجدول 4: 4، 8، 12، 16، 20، 24، 28، 32، 36، 40\nفي المسألة اللفظية: أقرأ، أحدد المطلوب، أختار العملية، ثم أحسب وأكتب الوحدة.',
+    example:{q:'في كل سلة 3 برتقالات. كم برتقالة في 5 سلال؟', steps:['المطلوب: عدد البرتقالات في كل السلال','كل سلة فيها 3، وعندنا 5 سلال ← 3 × 5','3 × 5 = 15 برتقالة'], a:'15 برتقالة'},
+    questions:[
+      {id:'q1',type:'short',skill:'جداول الضرب 3 و4',level:'تذكر',difficulty:1,prompt:'3 × 7 = ؟',accept:['21'],hints:['3 × 6 = 18، فأضف 3 أخرى'],explain:'3 × 7 = 21.'},
+      {id:'q2',type:'short',skill:'جداول الضرب 3 و4',level:'تذكر',difficulty:2,prompt:'4 × 6 = ؟',accept:['24'],hints:['4 × 5 = 20، ثم أضف 4'],explain:'4 × 6 = 24.'},
+      {id:'q3',type:'choice',skill:'المسائل اللفظية (ضرب)',level:'فهم',difficulty:2,prompt:'في كل صندوق 4 أقلام. أي عملية تعطينا عدد الأقلام في 6 صناديق؟',options:['4 + 6','4 × 6','6 − 4'],answer:1,hints:['كلما تكررت المجموعة نفسها عدة مرات نستخدم الضرب'],explain:'6 صناديق × 4 أقلام = 4 × 6.'},
+      {id:'q4',type:'short',skill:'المسائل اللفظية (ضرب)',level:'تطبيق',difficulty:2,prompt:'في كل صندوق 4 أقلام. كم قلمًا في 6 صناديق؟ (اكتب الرقم فقط)',accept:['24'],hints:['4 × 6'],similar:'مثال مشابه: 3 صناديق في كل منها 4 أقلام ← 4 × 3 = 12',explain:'4 × 6 = 24 قلمًا.'},
+      {id:'q5',type:'order',skill:'المسائل اللفظية (ضرب)',level:'تطبيق',difficulty:3,prompt:'رتّب خطوات حل المسألة',items:['اضرب 4 × 6','اقرأ المسألة وحدّد المطلوب','اكتب الناتج مع الوحدة: 24 قلمًا'],answer:[1,0,2],hints:['نبدأ دائمًا بالقراءة وفهم المطلوب'],explain:'اقرأ ← اختر العملية واحسب ← اكتب الناتج بالوحدة.'},
+      {id:'q6',type:'short',skill:'جداول الضرب 3 و4',level:'تذكر',difficulty:3,prompt:'4 × 9 = ؟',accept:['36'],hints:['4 × 10 = 40، فاطرح 4'],explain:'4 × 9 = 36.'}
+    ]}
+ ],
+ reem:[
+  { id:'r-math-dec', subject:'رياضيات', unit:'الوحدة 1: القيمة المكانية للأعداد العشرية', title:'القيمة المكانية ومقارنة الكسور العشرية وتقريبها', lang:'ar', source:'extra',
+    objectives:['أحدد القيمة المكانية حتى جزء من الألف','أقارن كسرين عشريين وأرتبهما','أقرّب الكسر العشري لأقرب جزء من عشرة'],
+    concepts:['جزء من عشرة، جزء من مئة، جزء من ألف','المقارنة بمساواة عدد المنازل','التقريب'],
+    explain:'في العدد 2.306: الرقم 3 في منزلة الأجزاء من عشرة، و0 في الأجزاء من مئة، و6 في الأجزاء من الألف.\nللمقارنة نساوي عدد المنازل: 0.5 = 0.50 ، فنقارن 0.50 بـ 0.45 ← 0.5 أكبر.\nللتقريب لأقرب جزء من عشرة ننظر إلى منزلة الأجزاء من مئة: إن كانت 5 أو أكثر نزيد 1 على منزلة الأجزاء من عشرة. 3.47 ← 3.5 ، و 3.42 ← 3.4.',
