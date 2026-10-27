@@ -1,0 +1,354 @@
+function nativeTTS(){ try{ return !!(window.Android && window.Android.hasArabicVoice && window.Android.hasArabicVoice()); }catch(e){ return false; } }
+function canSpeak(){ return (!!arVoice || nativeTTS()) && S.settings.sound; }
+function speak(text){ if(!canSpeak()) return; if(nativeTTS()){ try{ window.Android.speak(text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,'')); }catch(e){} return; } try{ speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(text.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,'')); u.voice=arVoice; u.lang=arVoice.lang; u.rate=.9; speechSynthesis.speak(u); }catch(e){} }
+
+/* ---------------- تقييم المهارات ---------------- */
+function skillStats(c){
+  const by={};
+  c.attempts.forEach(a=>{ if(a.mode==='placement_skip') return; (by[a.skill]=by[a.skill]||[]).push(a); });
+  const out=[];
+  Object.keys(by).forEach(sk=>{
+    const list=by[sk].slice().sort((a,b)=>a.ts-b.ts);
+    const n=list.length, ind=list.filter(a=>a.result==='independent').length, ast=list.filter(a=>a.result==='assisted').length, rev=list.filter(a=>a.result==='revealed').length;
+    const last3=list.slice(-3); const days=new Set(list.map(a=>localDate(new Date(a.ts)))).size;
+    const hintsUsed=list.filter(a=>a.hints>0).length;
+    let status='insufficient';
+    if(n>=3){
+      const last5=list.slice(-5);
+      if(last3.every(a=>a.result==='independent') && days>=2 && !last5.some(a=>a.result==='revealed')) status='mastered';
+      else if(last3.filter(a=>a.result==='revealed').length>=1 || last3.filter(a=>a.result==='independent').length<=1) status='needs_review';
+      else status='learning';
+    }
+    const levels={}; list.forEach(a=>{ levels[a.level]=levels[a.level]||{n:0,ok:0}; levels[a.level].n++; if(a.result!=='revealed') levels[a.level].ok++; });
+    out.push({skill:sk,n,ind,ast,rev,days,hintsUsed,status,last:list[n-1].ts,levels,subject:list[n-1].subject});
+  });
+  return out.sort((a,b)=>b.last-a.last);
+}
+const STATUS_SKILL={mastered:['متقنة','good','✅'],learning:['قيد التعلم','info','🔄'],needs_review:['تحتاج مراجعة','warn','⚠️'],insufficient:['البيانات غير كافية للتقييم','','…']};
+function evidenceText(s){ return `${s.ind} مستقلة، ${s.ast} بمساعدة، ${s.rev} عُرض الحل — من ${s.n} محاولة في ${s.days} ${s.days===1?'يوم':'أيام'}`; }
+function dueSkills(c){
+  const stats=skillStats(c); const today=localDate(); const out=[];
+  stats.forEach(s=>{ const m=c.skillMeta[s.skill]||{}; if(s.status==='needs_review') out.push(s.skill); else if(m.nextReview && m.nextReview<=today) out.push(s.skill); });
+  return out;
+}
+function scheduleSkill(c,skill,result){
+  const m=c.skillMeta[skill]||{interval:1}; const today=localDate();
+  if(result==='independent'){ m.interval=Math.min(14,(m.interval||1)*2); } else { m.interval=1; }
+  m.nextReview=addDays(today,m.interval); c.skillMeta[skill]=m;
+}
+function recordAttempt(c,lesson,q,result,cur){
+  const a={id:uid(),ts:Date.now(),lessonId:lesson.id,lessonTitle:lesson.title,subject:lesson.subject,qid:q.id,skill:q.skill,level:q.level||'فهم',result,tries:cur.tries,hints:cur.hints,mode:session.mode,seconds:Math.round((Date.now()-cur.startedAt)/1000)};
+  c.attempts.push(a); scheduleSkill(c,q.skill,result);
+  if(cur.wrongs.length) c.wrongs.push({ts:Date.now(),skill:q.skill,lessonTitle:lesson.title,prompt:q.prompt,wrongs:cur.wrongs.slice(0,3),correct:correctText(q)});
+  c.lastActive=Date.now(); c.lastActivityLabel=(session.mode==='review'?'مراجعة':session.mode==='placement'?'تقييم أولي':'درس')+': '+lesson.title;
+  let stars=1; if(result==='independent') stars=2; c.stars+=stars;
+  if(result==='assisted'&&cur.tries>=2) award(c,'persist','بلا استسلام 💪','أجاب صحيحًا بعد المحاولة مرة أخرى');
+  save(); return stars;
+}
+function award(c,id,title,desc){ if(c.badges.some(b=>b.id===id)) return false; c.badges.push({id,title,desc,ts:Date.now()}); toast('شارة جديدة: '+title); return true; }
+function correctText(q){
+  if(q.type==='choice') return q.options[q.answer];
+  if(q.type==='short') return q.accept[0];
+  if(q.type==='order') return q.answer.map(i=>q.items[i]).join(' ، ');
+  if(q.type==='match') return q.pairs.map(p=>p[0]+' ← '+p[1]).join(' | ');
+  return '';
+}
+function checkAnswer(q,cur){
+  if(q.type==='choice') return cur.selected===q.answer;
+  if(q.type==='short'){ const v=normalizeAr(cur.text,q.strict); return q.accept.some(a=>normalizeAr(a,q.strict)===v); }
+  if(q.type==='order') return cur.seq.length===q.items.length && cur.seq.every((v,i)=>v===q.answer[i]);
+  return false;
+}
+
+/* ---------------- الوقت الفعلي ---------------- */
+['click','keydown','touchstart','pointerdown'].forEach(ev=>document.addEventListener(ev,()=>{lastInteraction=Date.now();},{passive:true}));
+let tick=0;
+setInterval(()=>{
+  if(!S||!currentChildId||view.name==='parent'||view.name==='home'||view.name==='pin') return;
+  if(document.visibilityState!=='visible') return;
+  if(Date.now()-lastInteraction>60000) return;
+  const c=child(); const d=localDate(); c.activity[d]=(c.activity[d]||0)+1; tick++; if(tick%15===0) save();
+},1000);
+
+/* ---------------- العرض ---------------- */
+function toast(msg){ let t=$('.toast'); if(!t){ t=document.createElement('div'); t.className='toast'; document.body.appendChild(t);} t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{t.hidden=true;},2600); }
+function go(name,params){ view=Object.assign({name},params||{}); render(); window.scrollTo(0,0); }
+function render(){
+  const app=$('#app');
+  const c=currentChildId?child():null;
+  app.dataset.themeKid = (c && view.name!=='parent' && view.name!=='home' && view.name!=='pin') ? c.theme : '';
+  app.className='wrap'+((c&&c.stage==='junior'&&view.name!=='parent')?' junior':'')+(S.settings.motion?'':' reduce')+(view.name==='home'||view.name==='pin'?' narrow':'');
+  const R={home:rHome,pin:rPin,child:rChild,lessons:rLessons,session:rSession,hw:rHW,hwItem:rHWItem,brk:rBreak,parent:rParent,themePick:rThemePick,notes:rNotes,plan:rPlan,badges:rBadges};
+  app.innerHTML=(R[view.name]||rHome)();
+  bindAfterRender();
+}
+function demoNote(){ return `<div class="note">الدروس الموسومة «تدريب إضافي» من إعداد البرنامج على موضوعات من منهج 2026/2027 وليست نص الكتاب، والموسومة «تجريبي» لتجربة الشكل فقط. يضيف ولي الأمر نص الكتاب من لوحته.</div>`; }
+function storageNote(){ return storageOK?'':`<div class="note">تعذّر الحفظ في هذا المتصفح (قد يكون وضع التصفح الخاص). ستضيع البيانات عند الإغلاق.</div>`; }
+
+/* --- الشاشة الرئيسية --- */
+function rHome(){
+  return `<div class="stack" style="padding-block:24px">
+    <div style="text-align:center"><div style="font-size:3rem">🧭</div><h1>رحلة المعرفة</h1><p class="muted">من أنت اليوم؟</p></div>
+    <div class="grid">${childList().map(c=>`<div class="profile" role="button" tabindex="0" data-act="pick" data-id="${c.id}"><div class="av">${c.avatar}</div><div class="nm">${esc(c.name)}</div><div class="muted small">${esc(c.gradeLabel)}</div><div class="stars">⭐ ${c.stars}</div></div>`).join('')}</div>
+    <button class="btn-ghost" data-act="parentGate">🔒 منطقة ولي الأمر</button>
+    ${storageNote()}
+    <p class="muted small" style="text-align:center">تُحفظ البيانات على هذا الجهاز فقط داخل المتصفح. لا إعلانات ولا دردشة ولا روابط خارجية.</p>
+  </div>`;
+}
+/* --- رمز ولي الأمر --- */
+let pinBuf='';
+function rPin(){
+  const first=!S.pin; const confirm=view.confirmStep;
+  return `<div class="stack" style="padding-block:24px;text-align:center">
+    <h1>${first?(confirm?'أعد كتابة الرمز للتأكيد':'اختر رمزًا من 4 أرقام لمنطقة ولي الأمر'):'أدخل رمز ولي الأمر'}</h1>
+    <p class="muted small">${first?'هذا الرمز يمنع دخول الأطفال عرضًا إلى لوحتك. ليس حماية أمنية قوية لأن كل شيء محفوظ على هذا الجهاز.':''}</p>
+    <div class="pin-dots" aria-live="polite">${'●'.repeat(pinBuf.length)}${'○'.repeat(4-pinBuf.length)}</div>
+    <div class="pinpad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-act="pinKey" data-k="${n}">${n}</button>`).join('')}<button data-act="pinDel">⌫</button><button data-act="pinKey" data-k="0">0</button><button data-act="home">✕</button></div>
+    ${view.err?`<p style="color:var(--bad);font-weight:700">${esc(view.err)}</p>`:''}
+    ${!first?`<button class="btn-sm btn-ghost" data-act="pinForgot">نسيت الرمز؟</button>`:''}
+    ${view.showForgot?`<div class="card soft small">لا توجد طريقة لاستعادة الرمز لأن كل شيء محفوظ محليًا. يمكنك مسح كل بيانات البرنامج والبدء من جديد.<br><button class="btn-sm btn-danger" data-act="wipeAll">مسح كل البيانات</button></div>`:''}
+  </div>`;
+}
+function hashPin(p){ let h=7; for(const ch of p) h=(h*31+ch.charCodeAt(0))%1000003; return 'h'+h; }
+
+/* --- شاشة الطفل --- */
+function todayItems(c){
+  const today=localDate();
+  const hw=c.homework.filter(h=>h.status!=='parent_reviewed');
+  const due=hw.filter(h=>h.due===today), late=hw.filter(h=>h.due&&h.due<today&&h.status!=='child_done');
+  const tasks=c.tasks.filter(t=>!t.done&&(!t.date||t.date<=today));
+  const review=dueSkills(c);
+  return {due,late,tasks,review,hw};
+}
+function rChild(){
+  const c=child(); const t=todayItems(c);
+  const lessons=c.lessons; const doneSet=new Set(c.completedLessons);
+  const top=`<div class="topbar"><button class="btn-icon" data-act="home" aria-label="الرئيسية">🏠</button><div class="grow"><h1>${c.avatar} ${esc(c.name)}</h1><div class="muted small">${esc(c.journey)}</div></div>${canSpeak()?`<button class="btn-icon" data-act="say" data-text="أهلًا ${c.name}، ماذا نفعل اليوم؟" aria-label="اسمع">🔊</button>`:''}<button class="btn-icon" data-act="themePick" aria-label="الألوان">🎨</button><span class="stars">⭐ ${c.stars}</span></div>`;
+  if(!c.placed){
+    return top+`<div class="stack"><div class="card accent stack"><h2>${c.stage==='junior'?'لنلعب لعبة صغيرة أولًا 🎈':'لنتعرف على بعضنا أولًا 👋'}</h2><p>${c.stage==='junior'?'4 أسئلة سهلة لنعرف من أين نبدأ. لا توجد إجابة خطأ تُحزننا!':'أربعة أسئلة قصيرة لنعرف نقطة البداية. ليست اختبارًا، ولا درجات.'}</p><button class="btn-big btn-primary" data-act="placement">ابدأ</button><button class="btn-ghost" data-act="skipPlacement">لاحقًا</button></div></div>`;
+  }
+  if(c.stage==='junior'){
+    const next=lessons.find(l=>!doneSet.has(l.id))||lessons[0];
+    return top+`<div class="stack">
+      ${journeyBar(c)}
+      <button class="btn-huge btn-primary" data-act="startLesson" data-id="${next.id}"><span class="ic">📖</span>درس اليوم<span class="small" style="font-weight:600">${esc(next.title)}</span></button>
+      <div class="grid-2">
+        <button class="btn-huge btn-accent2" data-act="startReview"><span class="ic">🎲</span>ألعاب المراجعة</button>
+        <button class="btn-huge" data-act="hw"><span class="ic">📝</span>واجبي ${t.hw.length?`<span class="chip accent">${t.hw.length}</span>`:''}</button>
+      </div>
+      <button class="btn-big btn-ghost" data-act="lessons">كل الدروس</button>
+    </div>`;
+  }
+  if(c.stage==='mid'){
+    const missions=[];
+    lessons.forEach(l=>{ const prog=lessonProgress(c,l); missions.push({ic:'📖',title:'مهمة: '+l.title,sub:l.subject+' · '+(doneSet.has(l.id)?'مكتملة ✅':prog+' من '+l.questions.length+' أسئلة'),act:'startLesson',id:l.id,done:doneSet.has(l.id)}); });
+    t.hw.forEach(h=>missions.push({ic:'📝',title:'واجب: '+h.title,sub:h.subject+' · '+STATUS[h.status]+(h.due?' · التسليم '+fmtDate(h.due):''),act:'hwItem',id:h.id}));
+    if(t.review.length) missions.unshift({ic:'🔁',title:'مراجعة سريعة',sub:'مهارات تحتاج تدريبًا: '+t.review.slice(0,2).join('، '),act:'startReview',id:''});
+    return top+`<div class="stack">
+      ${journeyBar(c)}
+      <h2>مغامرة اليوم 🧭</h2>
+      <div class="stack">${missions.map(m=>`<button class="card" style="display:flex;gap:12px;align-items:center;text-align:right;justify-content:flex-start;min-height:72px;${m.done?'opacity:.7':''}" data-act="${m.act}" data-id="${m.id}"><span style="font-size:1.8rem">${m.ic}</span><span class="grow" style="flex:1;min-width:0"><b>${esc(m.title)}</b><br><span class="muted small">${esc(m.sub)}</span></span><span>←</span></button>`).join('')}</div>
+      <div class="row"><button class="btn-ghost btn-sm" data-act="badges">🏅 شاراتي (${c.badges.length})</button><button class="btn-ghost btn-sm" data-act="lessons">كل الدروس</button></div>
+    </div>`;
+  }
+  // senior
+  const today=localDate();
+  return top+`<div class="stack">
+    ${journeyBar(c)}
+    <div class="grid-2">
+      <div class="card stack"><div class="row" style="justify-content:space-between"><h2>اليوم · ${dayName(today)}</h2><button class="btn-sm btn-ghost" data-act="plan">الخطة الأسبوعية</button></div>
+        ${t.late.length?`<div class="chip bad">${t.late.length} واجب متأخر</div>`:''}
+        ${[...t.hw.slice().sort((a,b)=>(a.due||'9')<(b.due||'9')?-1:1).map(h=>`<button class="task" style="background:none;min-height:0;padding:8px 0;text-align:right;justify-content:flex-start;border-radius:0" data-act="hwItem" data-id="${h.id}">📝 <span class="t">واجب ${esc(h.subject)}: ${esc(h.title)} <span class="chip">${STATUS[h.status]}</span> ${h.due?`<span class="chip ${t.late.includes(h)?'bad':h.due===today?'warn':''}">${t.late.includes(h)?'متأخر':h.due===today?'اليوم':dayName(h.due)+' '+fmtDate(h.due).slice(0,5)}</span>`:''}</span></button>`),
+           ...t.tasks.slice(0,5).map(tk=>`<label class="task ${tk.done?'done':''}"><input type="checkbox" data-act="toggleTask" data-id="${tk.id}" ${tk.done?'checked':''}><span class="t">${esc(tk.title)} ${tk.date?`<span class="tag">${fmtDate(tk.date)}</span>`:''}</span></label>`)].join('')||'<p class="muted">لا مهام ولا واجبات مسجلة. أضيفي مهمة من الخطة.</p>'}
+        ${t.review.length?`<button class="btn-primary" data-act="startReview">🔁 مراجعة تراكمية (${t.review.length} مهارات)</button>`:`<button class="btn-ghost" data-act="startReview">🔁 مراجعة تراكمية</button>`}
+      </div>
+      <div class="card stack"><h2>الدروس</h2>${lessons.map(l=>`<button class="task" style="background:none;min-height:0;padding:8px 0;text-align:right;justify-content:flex-start;border-radius:0" data-act="startLesson" data-id="${l.id}"><span>${doneSet.has(l.id)?'✅':'📘'}</span><span class="t"><b>${esc(l.title)}</b> <span class="tag">${esc(l.subject)}</span>${c.hard.includes(l.id)?' <span class="chip warn">صعب</span>':''}<br><span class="muted small">${lessonProgress(c,l)}/${l.questions.length} أسئلة</span></span></button>`).join('')}</div>
+    </div>
+    <div class="row"><button class="btn-ghost btn-sm" data-act="notes">📓 ملاحظاتي وأهدافي</button><button class="btn-ghost btn-sm" data-act="hw">📝 كل الواجبات</button><button class="btn-ghost btn-sm" data-act="badges">🏅 الشارات (${c.badges.length})</button></div>
+  </div>`;
+}
+function lessonProgress(c,l){ const done=new Set(c.attempts.filter(a=>a.lessonId===l.id).map(a=>a.qid)); return l.questions.filter(q=>done.has(q.id)).length; }
+function journeyBar(c){
+  const doneSet=new Set(c.completedLessons); const nodes=c.lessons.map((l,i)=>`<div class="node ${doneSet.has(l.id)?'done':(i===c.completedLessons.length?'now':'')}" title="${esc(l.title)}">${doneSet.has(l.id)?'✓':(i+1)}</div>`);
+  return `<div class="journey" aria-label="تقدم الرحلة">${nodes.join('<div class="seg"></div>')}<div class="seg"></div><div class="node">🏁</div></div>`;
+}
+function rThemePick(){ const c=child(); return `<div class="topbar"><button class="btn-icon" data-act="child">→</button><h1>اختر ألوانك</h1></div><div class="grid">${Object.keys(THEMES).map(k=>`<button class="card ${c.theme===k?'accent':''}" data-act="setTheme" data-k="${k}" style="min-height:80px">${c.theme===k?'✓ ':''}${THEMES[k]}</button>`).join('')}</div>`; }
+function rBadges(){ const c=child(); return `<div class="topbar"><button class="btn-icon" data-act="child">→</button><h1>🏅 شارات ${esc(c.name)}</h1></div><div class="grid">${c.badges.length?c.badges.map(b=>`<div class="card"><b>${esc(b.title)}</b><br><span class="muted small">${esc(b.desc)}</span></div>`).join(''):'<p class="muted">لا شارات بعد. أكمل درسًا لتحصل على أول شارة.</p>'}</div>`; }
+function rLessons(){
+  const c=child(); const bySub={}; c.lessons.forEach(l=>{(bySub[l.subject]=bySub[l.subject]||[]).push(l);});
+  const cu=CURRICULUM[c.id]; const outline=c.stage==='junior'?'':`<div class="card stack"><h2>ما يدرسه الصف هذا الفصل</h2><p class="small muted">عناوين من خريطة المنهج (${esc(cu.year)}). التدريبات تُضاف تدريجيًا.</p>${cu.subjects.filter(sb=>sb.name!=='English').map(sb=>`<details><summary><b>${esc(sb.name)}</b></summary><ul style="margin:4px 0;padding-inline-start:20px" class="small">${sb.units.map(u=>`<li>${esc(u.title)}${u.lessons.length?`<ul style="padding-inline-start:16px">${u.lessons.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:''}</li>`).join('')}</ul></details>`).join('')}</div>`;
+  return `<div class="topbar"><button class="btn-icon" data-act="child">→</button><h1>الدروس</h1></div><div class="stack">${demoNote()}${Object.keys(bySub).map(s=>`<h2>${esc(s)}</h2><div class="stack">${bySub[s].map(l=>`<button class="card" style="text-align:right;justify-content:flex-start;gap:12px" data-act="startLesson" data-id="${l.id}"><span>${c.completedLessons.includes(l.id)?'✅':'📘'}</span><span style="flex:1;min-width:0"><b>${esc(l.title)}</b> <span class="tag">${esc(l.unit)}</span> ${srcChip(l)}</span></button>`).join('')}</div>`).join('')}${outline}</div>`;
+}
+
+/* --- الجلسة: افهم — جرّب — حل بنفسك — راجع --- */
+function startSession(lessonId,mode){
+  const c=child(); let queue=[], lesson=null;
+  if(mode==='lesson'){ lesson=c.lessons.find(l=>l.id===lessonId); queue=lesson.questions.map(q=>({lessonId:lesson.id,qid:q.id})); }
+  else if(mode==='review'){
+    const due=new Set(dueSkills(c)); const stats=skillStats(c); const mastered=new Set(stats.filter(s=>s.status==='mastered').map(s=>s.skill));
+    c.lessons.forEach(l=>l.questions.forEach(q=>{ if(due.has(q.skill)) queue.push({lessonId:l.id,qid:q.id,p:0}); else if(mastered.has(q.skill)) queue.push({lessonId:l.id,qid:q.id,p:2}); else if(c.attempts.some(a=>a.qid===q.id&&a.lessonId===l.id)) queue.push({lessonId:l.id,qid:q.id,p:1}); }));
+    queue=shuffle(queue,Date.now()%1000).sort((a,b)=>a.p-b.p).slice(0,c.stage==='junior'?5:8);
+    if(!queue.length){ toast('لا توجد مهارات للمراجعة بعد. ابدأ بدرس أولًا.'); return; }
+  } else if(mode==='placement'){
+    c.lessons.forEach(l=>{ l.questions.filter(q=>q.difficulty<=2).slice(0,2).forEach(q=>queue.push({lessonId:l.id,qid:q.id})); });
+    queue=shuffle(queue,7).slice(0,4);
+  }
+  session={mode,lessonId,step:mode==='lesson'?'explain':'practice',queue,idx:0,cur:null,results:[],level:1,sinceBreak:0,startedAt:Date.now(),stars:0};
+  if(mode==='lesson'){ // adaptive order: easy first; reorder by difficulty
+    session.queue.sort((a,b)=>qOf(a).difficulty-qOf(b).difficulty);
+  }
+  go('session');
+}
+function qOf(ref){ const l=child().lessons.find(x=>x.id===ref.lessonId); return l.questions.find(q=>q.id===ref.qid); }
+function lOf(ref){ return child().lessons.find(x=>x.id===ref.lessonId); }
+function initCur(){ const ref=session.queue[session.idx]; const q=qOf(ref); session.cur={tries:0,hints:0,revealed:false,selected:null,text:'',seq:[],matched:[],pick:null,mismatch:0,wrongs:[],fb:null,done:false,startedAt:Date.now(),rightOrder:q.type==='match'?shuffle(q.pairs.map((p,i)=>i),q.pairs.length*7+session.idx):null,result:null,explainText:''}; }
+function rSession(){
+  const c=child(); const lesson=session.lessonId?c.lessons.find(l=>l.id===session.lessonId):null;
+  const title=session.mode==='review'?'🔁 مراجعة':session.mode==='placement'?'👋 لنتعرف':lesson.title;
+  const steps=['افهم','جرّب','حل بنفسك','راجع']; const stepIdx={explain:0,example:1,practice:2,review:3}[session.step];
+  const top=`<div class="topbar"><button class="btn-icon" data-act="exitSession" aria-label="خروج">✕</button><div class="grow"><h1>${esc(title)}</h1>${lesson?`<div class="muted small">${esc(lesson.subject)} · ${esc(lesson.unit)} ${srcChip(lesson)}</div>`:''}</div>${canSpeak()?`<button class="btn-icon" data-act="sayScreen" aria-label="اسمع">🔊</button>`:''}</div>`;
+  const stepsBar=session.mode==='lesson'?`<div class="steps">${steps.map((s,i)=>`<span class="st ${i===stepIdx?'on':i<stepIdx?'done':''}">${s}</span>`).join('')}</div>`:'';
+  const ltr=lesson&&lesson.lang==='en'?' ltr':'';
+  if(session.step==='explain'){
+    return top+`<div class="stack">${stepsBar}
+      <div class="card stack"><div class="eyebrow">ماذا سنتعلم؟</div><ul style="margin:0;padding-inline-start:20px">${lesson.objectives.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div>
+      <div class="card stack"><div class="eyebrow">الشرح</div><div class="lesson-text${ltr}" id="speakable">${esc(lesson.explain)}</div></div>
+      ${lesson.attachments&&lesson.attachments.length?`<div class="card stack attach"><div class="eyebrow">صفحات الكتاب / المرفقات</div>${lesson.attachments.map(a=>a.data.startsWith('data:image')?`<img src="${a.data}" alt="${esc(a.name)}">`:`<div class="chip">📄 ${esc(a.name)}</div>`).join('')}</div>`:''}
+      <button class="btn-big btn-primary" data-act="step" data-s="example">جرّب مثالًا ←</button>
+    </div>`;
+  }
+  if(session.step==='example'){
+    const ex=lesson.example;
+    return top+`<div class="stack">${stepsBar}
+      <div class="card stack"><div class="eyebrow">مثال نحلّه معًا</div><div class="q-prompt${ltr}" id="speakable">${esc(ex.q)}</div>
+      <ol style="margin:0;padding-inline-start:22px" class="${ltr}">${ex.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>
+      <div class="feedback good${ltr}">الإجابة: ${esc(ex.a)}</div></div>
+      <div class="row"><button class="btn-ghost" data-act="step" data-s="explain">→ الشرح</button><button class="btn-big btn-primary" style="flex:1" data-act="step" data-s="practice">الآن دوري! ←</button></div>
+    </div>`;
+  }
+  if(session.step==='practice'){
+    if(session.idx>=session.queue.length){ session.step='review'; return rSession(); }
+    if(!session.cur) initCur();
+    const ref=session.queue[session.idx], q=qOf(ref), ql=lOf(ref), cur=session.cur; const qltr=ql.lang==='en'?' ltr':'';
+    const n=session.queue.length;
+    let body='';
+    if(q.type==='choice'){
+      body=`<div class="opts">${q.options.map((o,i)=>{ let cls='opt'; if(cur.done&&i===q.answer) cls+=' correct'; else if(cur.selected===i) cls+=cur.done?' wrong':(cur.fb&&cur.fb.kind!=='good'?' wrong':' selected'); return `<button class="${cls}${qltr}" data-act="choose" data-i="${i}" ${cur.done?'disabled':''}>${esc(o)}</button>`; }).join('')}</div>`;
+    } else if(q.type==='short'){
+      body=`<div class="row"><input id="shortIn" class="${qltr}" style="flex:1;min-width:160px;font-size:1.2rem" value="${esc(cur.text)}" ${cur.done?'disabled':''} placeholder="${ql.lang==='en'?'Your answer':'اكتب إجابتك'}" autocomplete="off"></div>`;
+    } else if(q.type==='order'){
+      const used=new Set(cur.seq);
+      body=`<div class="order-seq${qltr}">${cur.seq.length?cur.seq.map(i=>`<span class="tok">${esc(q.items[i])}</span>`).join(''):'<span class="muted small">اضغط العناصر بالترتيب الصحيح</span>'}</div>
+        <div class="opts">${q.items.map((it,i)=>`<button class="opt${qltr}" data-act="orderPick" data-i="${i}" ${used.has(i)||cur.done?'disabled':''}>${esc(it)}</button>`).join('')}</div>
+        <div class="row"><button class="btn-sm btn-ghost" data-act="orderUndo" ${cur.done?'disabled':''}>↩ تراجع</button></div>`;
+    } else if(q.type==='match'){
+      const m=new Set(cur.matched);
+      body=`<div class="match"><div class="col">${q.pairs.map((p,i)=>`<button class="opt ${m.has(i)?'matched':cur.pick===i?'selected':''}${qltr}" data-act="matchL" data-i="${i}" ${m.has(i)||cur.done?'disabled':''}>${esc(p[0])}</button>`).join('')}</div>
+        <div class="col">${cur.rightOrder.map(i=>`<button class="opt ${m.has(i)?'matched':''}${qltr}" data-act="matchR" data-i="${i}" ${m.has(i)||cur.done?'disabled':''}>${esc(q.pairs[i][1])}</button>`).join('')}</div></div>`;
+    }
+    const fb=cur.fb?`<div class="feedback ${cur.fb.kind}">${esc(cur.fb.text)}</div>`:'';
+    const canCheck=(q.type==='short')||(q.type==='order');
+    let actions='';
+    if(cur.done){
+      actions=`${(c.stage!=='junior'&&session.mode==='lesson')?`<div class="field"><label class="f" for="explainIn">${c.stage==='mid'?'اشرح طريقتك بجملة (اختياري)':'كيف فكرتِ؟ (اختياري)'}</label><textarea id="explainIn" style="min-height:64px" placeholder="مثال: عددت الكل ثم..."></textarea></div>`:''}<button class="btn-big btn-primary" data-act="next">${session.idx+1<n?'التالي ←':'أنهِ'}</button>`;
+    } else {
+      const hintBtn=cur.hints<(q.hints||[]).length?`<button class="btn-ghost" data-act="hint">💡 تلميح</button>`:(q.similar&&!cur.similarShown?`<button class="btn-ghost" data-act="similar">👀 مثال مشابه</button>`:'');
+      const revealBtn=cur.tries>=2?`<button class="btn-ghost" data-act="reveal">اعرض الحل مع الشرح</button>`:'';
+      actions=`<div class="row">${canCheck?`<button class="btn-big btn-primary" style="flex:1" data-act="check">تحقق</button>`:''}${hintBtn}${revealBtn}</div>`;
+    }
+    return top+`<div class="stack">${stepsBar}
+      <div class="row" style="justify-content:space-between"><span class="muted small">سؤال ${session.idx+1} من ${n} · <span class="tag">${esc(q.skill)}</span>${c.stage==='senior'?` · <span class="chip">${esc(q.level)}</span>`:''}</span><span class="stars">⭐ ${c.stars}</span></div>
+      <div class="progress"><span style="width:${Math.round(session.idx/n*100)}%"></span></div>
+      <div class="card stack">
+        ${q.visual?`<div class="q-visual" aria-hidden="true">${q.visual}</div>`:''}
+        <div class="q-prompt${qltr}" id="speakable">${esc(q.prompt)}</div>
+        ${body}
+        ${fb}
+        ${actions}
+      </div>
+    </div>`;
+  }
+  // review step (end of session)
+  const res=session.results; const ind=res.filter(r=>r==='independent').length, ast=res.filter(r=>r==='assisted').length, rev=res.filter(r=>r==='revealed').length;
+  const skills=[...new Set(session.queue.map(r=>qOf(r).skill))];
+  const off=OFFSCREEN[c.stage][(c.attempts.length)%OFFSCREEN[c.stage].length];
+  return top+`<div class="stack">${stepsBar}
+    <div class="celebrate pop">${rev===0&&ast===0?'🌟':'👏'}</div>
+    <div class="card stack" style="text-align:center"><h2>${session.mode==='placement'?'شكرًا! عرفنا من أين نبدأ':'أحسنت، أكملت الجلسة'}</h2><p class="stars">+${session.stars} ⭐</p>
+      <p class="muted">${ind} إجابة مستقلة · ${ast} بمساعدة · ${rev} عُرض الحل</p>
+      ${c.stage!=='junior'?`<div class="row" style="justify-content:center">${skills.map(s=>`<span class="chip">${esc(s)}</span>`).join('')}</div>`:''}
+    </div>
+    ${lesson&&session.mode==='lesson'?`<div class="card stack"><div class="eyebrow">ماذا تعلمنا؟</div><ul style="margin:0;padding-inline-start:20px">${lesson.objectives.map(o=>`<li>${esc(o)}</li>`).join('')}</ul></div>`:''}
+    <div class="card soft"><b>نشاط بعيدًا عن الشاشة:</b> ${esc(off)}</div>
+    <button class="btn-big btn-primary" data-act="child">العودة إلى ${esc(c.journey)}</button>
+  </div>`;
+}
+function finishQuestion(result){
+  const c=child(); const ref=session.queue[session.idx]; const q=qOf(ref), l=lOf(ref); const cur=session.cur;
+  cur.done=true; cur.result=result;
+  const stars=recordAttempt(c,l,q,result,cur); session.stars+=stars; session.results.push(result);
+  if(result==='independent'){ session.level=Math.min(3,session.level+1); } else if(result==='revealed'){ session.level=Math.max(1,session.level-1); }
+}
+function nextQuestion(){
+  const c=child(); const cur=session.cur;
+  const exp=$('#explainIn'); if(exp&&exp.value.trim()){ c.explanations.push({ts:Date.now(),qid:session.queue[session.idx].qid,lessonId:session.queue[session.idx].lessonId,prompt:qOf(session.queue[session.idx]).prompt,text:exp.value.trim().slice(0,300)}); }
+  session.idx++; session.cur=null; session.sinceBreak++;
+  if(session.idx>=session.queue.length){
+    session.step='review';
+    if(session.mode==='lesson'&&!c.completedLessons.includes(session.lessonId)){ c.completedLessons.push(session.lessonId); c.stars+=3; session.stars+=3; award(c,'first','أول درس 📖','أكمل أول درس في الرحلة'); if(c.completedLessons.length>=3) award(c,'three','مثابر 🧗','أكمل ثلاثة دروس'); }
+    if(session.mode==='review') award(c,'review','المراجع 🔁','أكمل أول جلسة مراجعة');
+    if(session.mode==='placement'){ c.placed=true; }
+    c.sessions.push({ts:Date.now(),mode:session.mode,lessonId:session.lessonId,seconds:Math.round((Date.now()-session.startedAt)/1000),results:session.results.slice()});
+    save(); render(); return;
+  }
+  // adaptive: within a lesson, pull a question matching current level forward
+  if(session.mode==='lesson'){ const rest=session.queue.slice(session.idx); const k=rest.findIndex(r=>qOf(r).difficulty===session.level); if(k>0){ const [it]=rest.splice(k,1); rest.unshift(it); session.queue=session.queue.slice(0,session.idx).concat(rest); } }
+  save();
+  if(session.sinceBreak>=c.breakEvery){ session.sinceBreak=0; go('brk'); return; }
+  render();
+}
+function rBreak(){ const c=child(); const off=OFFSCREEN[c.stage][(session.idx)%OFFSCREEN[c.stage].length]; return `<div class="stack" style="text-align:center;padding-block:30px"><div class="celebrate">🧺</div><h1>${c.stage==='junior'?'وقت الاستراحة!':'استراحة قصيرة'}</h1><p style="font-size:1.2rem">${esc(off)}</p>${canSpeak()?`<button class="btn-icon" data-act="say" data-text="${esc(off)}">🔊</button>`:''}<button class="btn-big btn-primary" data-act="backFromBreak">${c.stage==='junior'?'رجعتُ! 🙋':'أكملت، لنتابع'}</button></div>`; }
+function encourage(c){ const j=['قريب جدًا! لنحاول مرة أخرى','لا بأس، الخطأ جزء من التعلم. جرّب مرة أخرى','ممتاز أنك تحاول. فكّر مرة أخرى']; const s=['ليس بعد. أعد النظر في السؤال','محاولة جيدة. جرّبي مرة أخرى بهدوء','قريبة من الحل. راجعي الخطوة الأولى']; const arr=c.stage==='senior'?s:j; return arr[session.cur.tries%arr.length]; }
+function handleWrong(q,wrongText){
+  const c=child(); const cur=session.cur; cur.tries++; if(wrongText!=null) cur.wrongs.push(String(wrongText));
+  let text=encourage(c);
+  if(cur.hints<(q.hints||[]).length){ text+=' 💡 '+q.hints[cur.hints]; cur.hints++; }
+  else if(q.similar&&!cur.similarShown){ text+=' '+q.similar; cur.similarShown=true; cur.hints++; }
+  cur.fb={kind:'try',text};
+}
+function handleCorrect(q){
+  const cur=session.cur; const result=(cur.tries===0&&cur.hints===0)?'independent':'assisted';
+  cur.fb={kind:'good',text:(result==='independent'?'صحيح! ⭐⭐ ':'صحيح! ⭐ ')+(q.explain||'')};
+  finishQuestion(result);
+}
+
+/* --- الواجب (شاشة الطفل) --- */
+function rHW(){ const c=child(); const list=c.homework.slice().sort((a,b)=>(a.due||'9')<(b.due||'9')?-1:1);
+  return `<div class="topbar"><button class="btn-icon" data-act="child">→</button><h1>📝 واجباتي</h1></div><div class="stack">${list.length?list.map(h=>hwCard(h)).join(''):'<p class="muted">لا واجبات مسجلة. يضيفها ولي الأمر من لوحته.</p>'}</div>`; }
+function hwCard(h){ const late=h.due&&h.due<localDate()&&(h.status==='not_started'||h.status==='in_progress'); return `<button class="card" style="text-align:right;justify-content:flex-start;gap:12px;align-items:flex-start" data-act="hwItem" data-id="${h.id}"><span style="font-size:1.6rem">${h.status==='parent_reviewed'?'✅':h.status==='child_done'?'📬':h.status==='in_progress'?'✍️':'📝'}</span><span style="flex:1;min-width:0"><b>${esc(h.title)}</b> <span class="tag">${esc(h.subject)}</span><br><span class="chip ${h.status==='parent_reviewed'?'good':h.status==='child_done'?'info':''}">${STATUS[h.status]}</span> ${h.due?`<span class="chip ${late?'bad':''}">${late?'متأخر · ':''}التسليم ${fmtDate(h.due)}</span>`:''}</span></button>`; }
+function rHWItem(){ const c=child(); const h=c.homework.find(x=>x.id===view.id); const lesson=h.lessonId?c.lessons.find(l=>l.id===h.lessonId):null;
+  const stepsHtml=`<ol style="margin:0;padding-inline-start:22px"><li>اقرأ المطلوب جيدًا.</li><li>حاول الحل في الكراسة بنفسك أولًا.</li><li>إذا تعثرت، افتح شرح الدرس أو اطلب تلميحًا.</li><li>عندما تنتهي اضغط «أكملته» ليراجعه ولي الأمر.</li></ol>`;
+  return `<div class="topbar"><button class="btn-icon" data-act="hw">→</button><div class="grow"><h1>${esc(h.title)}</h1><div class="muted small">${esc(h.subject)} · ${h.due?'التسليم '+fmtDate(h.due)+' ('+dayName(h.due)+')':''}</div></div>${canSpeak()?`<button class="btn-icon" data-act="say" data-text="${esc(h.required)}">🔊</button>`:''}</div>
+  <div class="stack">
+    <div class="row"><span class="chip ${h.status==='parent_reviewed'?'good':h.status==='child_done'?'info':''}">${STATUS[h.status]}</span>${h.source==='demo'?'<span class="chip demo">واجب تجريبي</span>':''}</div>
+    <div class="card stack"><div class="eyebrow">المطلوب</div><div class="lesson-text">${esc(h.required)}</div>
+    ${h.attachments.length?`<div class="attach stack">${h.attachments.map(a=>a.data.startsWith('data:image')?`<img src="${a.data}" alt="${esc(a.name)}">`:`<div class="chip">📄 ${esc(a.name)}</div>`).join('')}</div>`:''}</div>
+    ${c.stage!=='junior'?`<div class="card soft">${stepsHtml}</div>`:''}
+    ${h.status==='not_started'?`<button class="btn-big btn-primary" data-act="hwStatus" data-id="${h.id}" data-s="in_progress">ابدأ الحل في الكراسة ✍️</button>`:''}
+    ${h.status==='in_progress'?`<div class="stack">
+      ${lesson?`<button class="btn-ghost" data-act="hwHelp" data-id="${h.id}">💡 ${view.help?'إخفاء المساعدة':'أحتاج مساعدة (شرح الدرس)'}</button>`:''}
+      ${view.help&&lesson?`<div class="card stack"><div class="eyebrow">من درس: ${esc(lesson.title)}</div><div class="lesson-text">${esc(lesson.explain)}</div><div class="feedback hint">مثال: ${esc(lesson.example.q)} ← ${esc(lesson.example.a)}</div><button class="btn-sm" data-act="startLesson" data-id="${lesson.id}">تدرّب على الدرس</button></div>`:''}
+      <button class="btn-big btn-accent2" data-act="hwStatus" data-id="${h.id}" data-s="child_done">أكملته ✔</button>
+      <p class="muted small">الضغط على «أكملته» لا يعني أن الحل صحيح أو سُلّم للمدرسة؛ سيراجعه ولي الأمر.</p></div>`:''}
+    ${h.status==='child_done'?`<div class="feedback hint">في انتظار مراجعة ولي الأمر. ${h.parentNote?'':''}</div>`:''}
+    ${h.status==='parent_reviewed'?`<div class="feedback good">راجعه ولي الأمر ✅ ${h.parentNote?'— '+esc(h.parentNote):''}</div>`:''}
+  </div>`;
+}
+function setHW(c,h,status,by,note){ h.status=status; h.log.push({ts:Date.now(),status,by}); if(note!=null) h.parentNote=note; c.lastActive=Date.now(); c.lastActivityLabel='واجب: '+h.title; save(); }
+
+/* --- ريم: ملاحظات وأهداف وخطة --- */
+function rNotes(){ const c=child(); return `<div class="topbar"><button class="btn-icon" data-act="child">→</button><h1>📓 ملاحظاتي وأهدافي</h1></div>
+  <div class="grid-2">
+    <div class="card stack"><h2>ملاحظات المذاكرة</h2><textarea id="notesIn" placeholder="ما الذي أريد تذكره؟">${esc(c.notes)}</textarea><button class="btn-sm btn-primary" data-act="saveNotes">حفظ</button></div>
+    <div class="card stack"><h2>الأجزاء الصعبة</h2><p class="muted small">علّمي الدروس التي تجدينها صعبة ليظهر ذلك لولي الأمر.</p>${c.lessons.map(l=>`<label class="task"><input type="checkbox" data-act="toggleHard" data-id="${l.id}" ${c.hard.includes(l.id)?'checked':''}><span class="t">${esc(l.title)} <span class="tag">${esc(l.subject)}</span></span></label>`).join('')}</div>
+    <div class="card stack"><h2>أهدافي</h2>${c.goals.map(g=>`<div class="task ${g.done?'done':''}"><input type="checkbox" aria-label="تم" data-act="toggleGoal" data-id="${g.id}" ${g.done?'checked':''}><span class="t">${esc(g.title)}</span><button class="btn-sm btn-ghost" data-act="delGoal" data-id="${g.id}">✕</button></div>`).join('')||'<p class="muted small">لا أهداف بعد.</p>'}<div class="row"><input id="goalIn" placeholder="هدف جديد، مثل: أتقن جمع الكسور هذا الأسبوع" style="flex:1"><button class="btn-sm btn-primary" data-act="addGoal">إضافة</button></div></div>
