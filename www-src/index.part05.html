@@ -1,0 +1,87 @@
+    case 'orderPick': { const cur=session.cur; cur.seq.push(+d.i); cur.fb=null; render(); break; }
+    case 'orderUndo': { session.cur.seq.pop(); render(); break; }
+    case 'matchL': { session.cur.pick=+d.i; render(); break; }
+    case 'matchR': { const q=qOf(session.queue[session.idx]); const cur=session.cur; if(cur.pick==null){ cur.fb={kind:'hint',text:'اختر عنصرًا من العمود الأول أولًا'}; render(); break; } if(cur.pick===+d.i){ cur.matched.push(+d.i); cur.pick=null; cur.fb=null; if(cur.matched.length===q.pairs.length){ handleCorrect(q); } } else { cur.wrongs.push(q.pairs[cur.pick][0]+' ← '+q.pairs[+d.i][1]); cur.pick=null; handleWrong(q,null); } render(); break; }
+    case 'toggleTask': { const t=c.tasks.find(x=>x.id===d.id); if(t){ t.done=el.checked; c.lastActive=Date.now(); c.lastActivityLabel='مهمة: '+t.title; save(); render(); } break; }
+    case 'addTask': { const v=$('#taskIn').value.trim(); if(!v) break; c.tasks.push({id:uid(),title:v,date:$('#taskDay').value,done:false,by:'child'}); save(); render(); break; }
+    case 'delTask': c.tasks=c.tasks.filter(t=>t.id!==d.id); save(); render(); break;
+    case 'saveNotes': c.notes=$('#notesIn').value.slice(0,2000); save(); toast('حُفظت الملاحظات'); break;
+    case 'toggleHard': { if(el.checked){ if(!c.hard.includes(d.id)) c.hard.push(d.id); } else c.hard=c.hard.filter(x=>x!==d.id); save(); break; }
+    case 'toggleGoal': { const g=c.goals.find(x=>x.id===d.id); if(g){ g.done=el.checked; save(); render(); } break; }
+    case 'addGoal': { const v=$('#goalIn').value.trim(); if(!v) break; c.goals.push({id:uid(),title:v,done:false}); save(); render(); break; }
+    case 'delGoal': c.goals=c.goals.filter(g=>g.id!==d.id); save(); render(); break;
+    /* parent gate */
+    case 'parentGate': pinBuf=''; currentChildId=null; go('pin'); break;
+    case 'pinKey': if(pinBuf.length<4){ pinBuf+=d.k; } if(pinBuf.length===4){ pinSubmit(); } else render(); break;
+    case 'pinDel': pinBuf=pinBuf.slice(0,-1); render(); break;
+    case 'pinForgot': view.showForgot=true; render(); break;
+    case 'lockParent': go('home'); break;
+    case 'ptab': go('parent',{tab:d.t,id:d.id||view.id}); break;
+    case 'psub': view.sub=d.s; view.err=''; render(); break;
+    case 'useTitle': view.ldraft={lSub:d.sub,lUnit:d.unit,lTitle:d.title,lSource:'book',lTerm:'الفصل الأول 2026/2027'}; view.qdraft=[]; view.sub='lesson'; view.err=''; render(); window.scrollTo(0,0); break;
+    case 'reviewHW': view.reviewId=d.id; render(); break;
+    case 'confirmReviewHW': { const cc=child(d.cid); const h=cc.homework.find(x=>x.id===d.id); setHW(cc,h,'parent_reviewed','parent',$('#hwNote').value.trim()); view.reviewId=null; toast('تمت المراجعة'); render(); break; }
+    case 'reopenHW': { const cc=child(d.cid); const h=cc.homework.find(x=>x.id===d.id); setHW(cc,h,'in_progress','parent'); render(); break; }
+    case 'delHW': { const cc=child(d.cid); cc.homework=cc.homework.filter(h=>h.id!==d.id); save(); render(); break; }
+    case 'saveStudyTimes': { const cc=child(d.cid); cc.studyTimes=$('#stIn').value.slice(0,200); save(); toast('حُفظ'); break; }
+    case 'addTaskP': { const cc=child(d.cid); const v=$('#ptaskIn').value.trim(); if(!v) break; cc.tasks.push({id:uid(),title:v,date:$('#ptaskDay').value||localDate(),done:false,by:'parent'}); save(); render(); break; }
+    case 'delTaskP': { const cc=child(d.cid); cc.tasks=cc.tasks.filter(t=>t.id!==d.id); save(); render(); break; }
+    case 'qadd': {
+      const type=$('#qType').value, prompt=$('#qPrompt').value.trim(), lines=$('#qOpts').value.split('\n').map(s=>s.trim()).filter(Boolean), skill=$('#qSkill').value.trim();
+      captureLessonForm(); if(!prompt||!skill||!lines.length){ view.err='السؤال والمهارة والخيارات/الإجابات مطلوبة'; render(); break; }
+      const q={id:uid(),type,skill,level:$('#qLevel').value,difficulty:+$('#qDiff').value,prompt,hints:[$('#qHint').value.trim(),$('#qHint2').value.trim()].filter(Boolean),explain:$('#qExplain').value.trim()};
+      if(type==='choice'){ const ai=lines.findIndex(l=>l.startsWith('*')); if(ai<0||lines.length<2){ view.err='ضع * قبل الخيار الصحيح، وخيارين على الأقل'; render(); break; } q.options=lines.map(l=>l.replace(/^\*/,'').trim()); q.answer=ai; }
+      else { q.accept=lines; }
+      view.qdraft=(view.qdraft||[]).concat([q]); view.err=''; view.keepForm=true; render(); break; }
+    case 'qdel': captureLessonForm(); view.qdraft.splice(+d.i,1); render(); break;
+    case 'saveLesson': {
+      const cc=child(d.cid); captureLessonForm(); const title=$('#lTitle').value.trim(), sub=$('#lSub').value.trim(), exp=$('#lExp').value.trim();
+      if(!title||!sub||!exp){ view.err='المادة والعنوان والشرح مطلوبة'; render(); break; }
+      if(!(view.qdraft&&view.qdraft.length)){ view.err='أضف سؤالًا واحدًا على الأقل'; render(); break; }
+      readFiles($('#lAtt'),(att,errs)=>{
+        const l={id:uid(),subject:sub,unit:$('#lUnit').value.trim()||'بدون وحدة',title,source:$('#lSource').value,lang:$('#lLang').value,term:$('#lTerm').value.trim(),objectives:$('#lObj').value.split('\n').map(s=>s.trim()).filter(Boolean),concepts:[],explain:exp,
+          example:{q:$('#lExQ').value.trim()||'—',steps:$('#lExS').value.split('\n').map(s=>s.trim()).filter(Boolean),a:$('#lExA').value.trim()||'—'},questions:view.qdraft,attachments:att,createdAt:Date.now()};
+        cc.lessons.push(l); save(); if(!storageOK){ view.err='تعذّر الحفظ: ربما المرفقات كبيرة جدًا لمساحة المتصفح. جرّب صورًا أصغر.'; cc.lessons.pop(); save(); render(); return; }
+        view.qdraft=[]; view.ldraft=null; view.sub='list'; toast('حُفظ الدرس'+(errs&&errs.length?' (تخطّينا: '+errs.join('، ')+')':'')); render();
+      }); break; }
+    case 'saveHW': {
+      const cc=child(d.cid); const title=$('#hTitle').value.trim(), sub=$('#hSub').value.trim(), req=$('#hReq').value.trim();
+      view.hdraft={hSub:sub,hTitle:title,hDue:$('#hDue').value,hLesson:$('#hLesson').value,hReq:req}; if(!title||!sub||!req){ view.err='المادة والعنوان والمطلوب مطلوبة'; render(); break; }
+      readFiles($('#hAtt'),(att,errs)=>{ cc.homework.push({id:uid(),subject:sub,title,required:req,due:$('#hDue').value,lessonId:$('#hLesson').value||null,attachments:att,status:'not_started',source:'parent',createdBy:'parent',createdAt:Date.now(),log:[{ts:Date.now(),status:'not_started',by:'parent'}],parentNote:''}); save(); if(!storageOK){ cc.homework.pop(); save(); view.err='تعذّر الحفظ: المرفقات كبيرة جدًا.'; render(); return; } view.hdraft=null; toast('حُفظ الواجب'); go('parent',{tab:'child',id:cc.id}); }); break; }
+    case 'delLesson': { const cc=child(d.cid); cc.lessons=cc.lessons.filter(l=>l.id!==d.id); cc.completedLessons=cc.completedLessons.filter(x=>x!==d.id); save(); render(); break; }
+    case 'copyWeekly': copyText(weeklyText()); break;
+    case 'printWeekly': try{ if(window.Android&&window.Android.print) window.Android.print(); else window.print(); }catch(e){} break;
+    case 'setSound': S.settings.sound=el.checked; save(); break;
+    case 'setMotion': S.settings.motion=el.checked; save(); render(); break;
+    case 'setThemeP': child(d.cid).theme=el.value; save(); break;
+    case 'changePin': { const v=$('#newPin').value.trim(); if(!/^\d{4}$/.test(v)){ toast('الرمز 4 أرقام'); break; } S.pin=hashPin(v); save(); toast('تم تغيير الرمز'); break; }
+    case 'exportData': view.exportText=JSON.stringify(S); render(); break;
+    case 'copyExport': copyText(view.exportText); break;
+    case 'wipeChild': view.confirmWipe=d.cid; render(); break;
+    case 'wipeAll': view.confirmWipe='all'; if(view.name==='pin'){ wipe('all'); } else render(); break;
+    case 'wipeCancel': view.confirmWipe=null; render(); break;
+    case 'wipeConfirm': wipe(view.confirmWipe); break;
+  }
+}
+function wipe(what){ if(what==='all'){ S=freshState(); try{ localStorage.removeItem(STORAGE_KEY);}catch(e){} currentChildId=null; go('home'); toast('حُذفت كل البيانات'); } else { S.children[what]=freshChild(CHILD_BASE.find(c=>c.id===what)); save(); view.confirmWipe=null; toast('حُذفت بيانات الطفل'); render(); } }
+function copyText(t){ try{ navigator.clipboard.writeText(t).then(()=>toast('تم النسخ'),()=>fallbackCopy(t)); }catch(e){ fallbackCopy(t); } }
+function fallbackCopy(t){ const ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); toast('تم النسخ'); }catch(e){ toast('انسخ النص يدويًا'); } document.body.removeChild(ta); }
+function importData(e){ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const st=JSON.parse(r.result); if(st&&st.v===1&&st.children){ S=st; save(); toast('تم الاستيراد'); render(); } else toast('الملف غير صالح'); }catch(err){ toast('الملف غير صالح'); } }; r.readAsText(f); }
+function pinSubmit(){
+  if(!S.pin){ if(!view.confirmStep){ view.confirmStep=true; view.first=pinBuf; pinBuf=''; render(); return; } if(view.first===pinBuf){ S.pin=hashPin(pinBuf); save(); pinBuf=''; go('parent',{tab:'overview'}); } else { pinBuf=''; view.confirmStep=false; view.err='الرمزان مختلفان، حاول مرة أخرى'; render(); } return; }
+  if(hashPin(pinBuf)===S.pin){ pinBuf=''; go('parent',{tab:'overview'}); } else { pinBuf=''; view.err='رمز غير صحيح'; render(); }
+}
+// click on choice option
+document.addEventListener('click',e=>{ const b=e.target.closest('[data-act="choose"][data-i]'); if(!b||!session||!session.cur||session.cur.done) return; const q=qOf(session.queue[session.idx]); const cur=session.cur; cur.selected=+b.dataset.i; if(checkAnswer(q,cur)) handleCorrect(q); else handleWrong(q,q.options[cur.selected]); render(); });
+
+/* ---------------- تشغيل ---------------- */
+function start(){ S=load(); render(); }
+try{ window.claude&&window.claude.hot&&window.claude.hot.snapshot(()=>({view,currentChildId})); }catch(e){}
+if(window.claude&&window.claude.hot&&window.claude.hot.ready){ window.claude.hot.ready(data=>{ start(); if(data&&data.view&&data.view.name!=='session'){ currentChildId=data.currentChildId||null; view=data.view; if(view.name==='parent') view={name:'home'}; render(); } }); } else start();
+window.__rihlaBack=function(){ const n=view.name; if(n==='home') return false; if(n==='session'){ act('exitSession',{}); return true; } if(n==='hwItem'){ act('hw',{}); return true; } if(n==='parent'||n==='pin'){ act('home',{}); return true; } if(n==='child'){ act('home',{}); return true; } act('child',{}); return true; };
+window.__rihla={get S(){return S;},skillStats,checkAnswer,normalizeAr,recommendation,weekly,hashPin,freshState,load,save,act,go,startSession,get session(){return session;},set child(id){currentChildId=id;},DEMO_LESSONS,CURRICULUM};
+})();
+</script>
+
+</body>
+</html>
