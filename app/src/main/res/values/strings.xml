@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">رحلة المعرفة</string>
+    <string name="print_job">رحلة المعرفة — الملخص الأسبوعي</string>
+    <string name="saved_to_downloads">تم حفظ الملف في مجلد التنزيلات</string>
+    <string name="save_failed">تعذّر حفظ الملف</string>
+    <string name="press_back_again">اضغط رجوع مرة أخرى للخروج</string>
+</resources>
